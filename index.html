@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>HGE Dispatch - Live Tracking</title>
+    <title>HGE Dispatch v9 - Live Tracking</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -13,14 +13,21 @@
 
     <style>
         .draggable { cursor: move; user-select: none; transition: all 0.2s; }
-        .draggable:hover { transform: scale(1.02); }
         .drop-zone { min-height: 140px; transition: all 0.2s; border-radius: 12px; border: 2px solid #e2e8f0; background-color: #f8fafc; }
         .drop-zone.drag-over { background-color: #fff7ed; border-color: #f97316; border-style: dashed; }
         
         /* Badges */
-        .crew-badge { background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%); }
-        .equipment-badge { background: linear-gradient(135deg, #065f46 0%, #10b981 100%); }
-        .in-use-badge { background: #fee2e2 !important; border: 1px solid #ef4444 !important; color: #b91c1c !important; opacity: 0.8; }
+        .crew-badge { background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%); color: white; }
+        .equipment-badge { background: linear-gradient(135deg, #065f46 0%, #10b981 100%); color: white; }
+        
+        /* THE RED HIGHLIGHT STYLE */
+        .in-use-red { 
+            background: #fecaca !important; 
+            border: 2px solid #ef4444 !important; 
+            color: #b91c1c !important; 
+            opacity: 0.9;
+            cursor: not-allowed;
+        }
         
         .tab-active { border-bottom: 4px solid #1e40af; color: #1e40af; }
         .custom-scrollbar::-webkit-scrollbar { width: 6px; }
@@ -28,7 +35,7 @@
         @media print { .no-print { display: none; } }
     </style>
 </head>
-<body class="bg-slate-100">
+<body class="bg-slate-100 text-slate-900">
     <div id="app"></div>
 
     <script type="text/babel">
@@ -45,22 +52,31 @@
             const [jobsList] = useState(getHGEJobs());
 
             // STATE
-            const [assignments, setAssignments] = useState(() => JSON.parse(localStorage.getItem('hge_assign_v8')) || []);
-            const [activeRowJobs, setActiveRowJobs] = useState(() => JSON.parse(localStorage.getItem('hge_rows_v8')) || ['SELECT JOB', 'SELECT JOB', 'SELECT JOB']);
+            const [assignments, setAssignments] = useState(() => JSON.parse(localStorage.getItem('hge_assign_v9')) || []);
+            const [activeRowJobs, setActiveRowJobs] = useState(() => JSON.parse(localStorage.getItem('hge_rows_v9')) || ['SELECT JOB', 'SELECT JOB', 'SELECT JOB']);
 
             useEffect(() => {
-                localStorage.setItem('hge_assign_v8', JSON.stringify(assignments));
-                localStorage.setItem('hge_rows_v8', JSON.stringify(activeRowJobs));
+                localStorage.setItem('hge_assign_v9', JSON.stringify(assignments));
+                localStorage.setItem('hge_rows_v9', JSON.stringify(activeRowJobs));
             }, [assignments, activeRowJobs]);
 
-            // Helper to check if item is assigned on current date
-            const isAssigned = (name) => {
-                return assignments.some(a => a.date === selectedDate && a.name === name);
+            // IMPROVED CHECK LOGIC
+            const isItemAssigned = (name) => {
+                return assignments.some(a => 
+                    a.date === selectedDate && 
+                    a.name.trim().toLowerCase() === name.trim().toLowerCase()
+                );
             };
 
             const handleDrop = (rowIndex) => {
                 if (!draggedItem) return;
                 
+                // Prevent duplicate assignment in the same drop
+                if(isItemAssigned(draggedItem.name)) {
+                    alert(`${draggedItem.name} is already assigned to a job today!`);
+                    return;
+                }
+
                 const newAssign = {
                     id: Date.now(),
                     date: selectedDate,
@@ -74,12 +90,18 @@
                 setDraggedItem(null);
             };
 
+            const updateRowJob = (index, jobName) => {
+                const newRows = [...activeRowJobs];
+                newRows[index] = jobName;
+                setActiveRowJobs(newRows);
+            };
+
             return (
                 <div className="min-h-screen flex flex-col font-sans">
                     <header className="bg-slate-900 text-white p-4 shadow-xl flex justify-between items-center no-print">
                         <div className="flex items-center gap-3">
-                            <i className="fas fa-microchip text-orange-500 text-2xl"></i>
-                            <h1 className="text-xl font-black tracking-tighter uppercase italic">HGE Live Dispatch</h1>
+                            <i className="fas fa-traffic-light text-orange-500 text-2xl"></i>
+                            <h1 className="text-xl font-black tracking-tighter uppercase italic">HGE Live Dispatch v9</h1>
                         </div>
                         <div className="flex gap-2">
                              <button onClick={() => setActiveRowJobs([...activeRowJobs, 'SELECT JOB'])} className="bg-orange-600 hover:bg-orange-500 px-3 py-1 rounded text-[10px] font-bold uppercase">+ Add Job Row</button>
@@ -100,11 +122,11 @@
                         {activeTab === 'schedule' ? (
                             <div className="flex flex-col lg:flex-row gap-8">
                                 
-                                {/* Sidebar with Status Tracking */}
+                                {/* Sidebar */}
                                 <div className="w-full lg:w-1/4 no-print">
                                     <div className="bg-white p-5 rounded-2xl shadow-md border border-slate-200 sticky top-24 h-[80vh] flex flex-col">
                                         <div className="mb-4">
-                                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">Dispatch Date</label>
+                                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">Today's Date</label>
                                             <input type="date" value={selectedDate} onChange={e => setSelectedDate(e.target.value)} 
                                                 className="font-bold text-slate-800 bg-slate-50 p-2 rounded-lg w-full text-center border" />
                                         </div>
@@ -114,14 +136,14 @@
                                                 <h3 className="font-black text-blue-700 mb-3 text-[10px] uppercase tracking-widest">Personnel</h3>
                                                 <div className="space-y-2">
                                                     {employees.map(e => {
-                                                        const inUse = isAssigned(e.name);
+                                                        const inUse = isItemAssigned(e.name);
                                                         return (
                                                             <div key={e.id} 
                                                                 draggable={!inUse} 
                                                                 onDragStart={() => !inUse && setDraggedItem({...e, category: 'crew'})}
-                                                                className={`${inUse ? 'in-use-badge' : 'crew-badge text-white'} p-2 rounded-lg text-[11px] font-bold shadow-sm draggable flex justify-between items-center`}>
+                                                                className={`${inUse ? 'in-use-red' : 'crew-badge'} p-2 rounded-lg text-[11px] font-bold shadow-sm draggable flex justify-between items-center`}>
                                                                 <span>{e.name}</span>
-                                                                {inUse && <span className="text-[8px] font-black uppercase tracking-tighter bg-red-600 text-white px-1 rounded">In Use</span>}
+                                                                {inUse && <i className="fas fa-lock text-[10px]"></i>}
                                                             </div>
                                                         );
                                                     })}
@@ -131,14 +153,14 @@
                                                 <h3 className="font-black text-emerald-700 mb-3 text-[10px] uppercase tracking-widest">Fleet</h3>
                                                 <div className="space-y-2">
                                                     {equipment.map(eq => {
-                                                        const inUse = isAssigned(eq.name);
+                                                        const inUse = isItemAssigned(eq.name);
                                                         return (
                                                             <div key={eq.id} 
                                                                 draggable={!inUse}
                                                                 onDragStart={() => !inUse && setDraggedItem({...eq, category: 'equip'})}
-                                                                className={`${inUse ? 'in-use-badge' : 'equipment-badge text-white'} p-2 rounded-lg text-[11px] font-bold shadow-sm draggable flex justify-between items-center`}>
+                                                                className={`${inUse ? 'in-use-red' : 'equipment-badge'} p-2 rounded-lg text-[11px] font-bold shadow-sm draggable flex justify-between items-center`}>
                                                                 <span>{eq.name}</span>
-                                                                {inUse && <span className="text-[8px] font-black uppercase tracking-tighter bg-red-600 text-white px-1 rounded">Deployed</span>}
+                                                                {inUse && <i className="fas fa-check-circle text-[10px]"></i>}
                                                             </div>
                                                         );
                                                     })}
@@ -148,7 +170,7 @@
                                     </div>
                                 </div>
 
-                                {/* Dynamic Board */}
+                                {/* Dynamic Job Rows */}
                                 <div className="w-full lg:w-3/4 space-y-4">
                                     {activeRowJobs.map((activeJob, idx) => (
                                         <div key={idx} 
@@ -160,7 +182,7 @@
                                                 <select 
                                                     value={activeJob} 
                                                     onChange={(e) => updateRowJob(idx, e.target.value)}
-                                                    className="bg-slate-800 text-orange-400 font-black text-sm uppercase p-1 rounded border-none focus:ring-0 cursor-pointer"
+                                                    className="bg-slate-800 text-orange-400 font-black text-xs uppercase p-1 rounded border-none focus:ring-0 cursor-pointer"
                                                 >
                                                     <option>CHOOSE JOB...</option>
                                                     {jobsList.map(j => (
@@ -168,21 +190,21 @@
                                                     ))}
                                                 </select>
                                                 <button onClick={() => confirm('Remove row?') && setActiveRowJobs(activeRowJobs.filter((_, i) => i !== idx))} className="text-slate-500 hover:text-red-400 text-xs no-print">
-                                                    <i className="fas fa-times-circle"></i>
+                                                    <i className="fas fa-trash"></i>
                                                 </button>
                                             </div>
 
                                             <div className="p-4 flex flex-wrap gap-2">
                                                 {assignments.filter(a => a.date === selectedDate && a.rowIndex === idx).map(a => (
-                                                    <div key={a.id} className={`${a.category === 'crew' ? 'crew-badge' : 'equipment-badge'} text-white p-3 rounded-xl shadow min-w-[140px]`}>
+                                                    <div key={a.id} className={`${a.category === 'crew' ? 'crew-badge' : 'equipment-badge'} p-3 rounded-xl shadow min-w-[150px]`}>
                                                         <div className="flex justify-between items-center mb-1">
                                                             <p className="text-[11px] font-black">{a.name}</p>
-                                                            <button onClick={() => setAssignments(assignments.filter(x => x.id !== a.id))} className="text-[10px] opacity-50 hover:opacity-100"><i className="fas fa-times"></i></button>
+                                                            <button onClick={() => setAssignments(assignments.filter(x => x.id !== a.id))} className="text-white opacity-50 hover:opacity-100"><i className="fas fa-times-circle"></i></button>
                                                         </div>
                                                         <input 
-                                                            type="text" placeholder="Note..." value={a.note}
+                                                            type="text" placeholder="Note (e.g. Digging)" value={a.note}
                                                             onChange={(e) => setAssignments(assignments.map(item => item.id === a.id ? {...item, note: e.target.value} : item))}
-                                                            className="w-full bg-black/20 rounded px-1 py-0.5 text-[9px] text-white border-none"
+                                                            className="w-full bg-black/20 rounded px-1 py-1 text-[9px] text-white border-none focus:ring-1 focus:ring-white/30"
                                                         />
                                                     </div>
                                                 ))}
@@ -192,12 +214,21 @@
                                 </div>
                             </div>
                         ) : (
-                            <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200 text-xs">
-                                <h2 className="text-xl font-black mb-4 uppercase">Reference Lists</h2>
-                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                    {activeTab === 'personnel' && employees.map(e => <div key={e.id} className="p-3 bg-slate-50 rounded-lg"><b>{e.name}</b><br/>{e.role}</div>)}
-                                    {activeTab === 'fleet' && equipment.map(eq => <div key={eq.id} className="p-3 bg-slate-50 rounded-lg"><b>{eq.name}</b><br/>{eq.type}</div>)}
-                                    {activeTab === 'directory' && jobsList.map(j => <div key={j.id} className="p-3 bg-slate-50 rounded-lg"><b>{j.id}</b> - {j.name}</div>)}
+                            <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200">
+                                <h2 className="text-xl font-black mb-4 uppercase">System Records</h2>
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-xs">
+                                    <div>
+                                        <h4 className="font-bold text-blue-600 mb-2 uppercase border-b">Team</h4>
+                                        {employees.map(e => <div key={e.id} className="py-1">{e.name} - {e.role}</div>)}
+                                    </div>
+                                    <div>
+                                        <h4 className="font-bold text-emerald-600 mb-2 uppercase border-b">Fleet</h4>
+                                        {equipment.map(eq => <div key={eq.id} className="py-1">{eq.name}</div>)}
+                                    </div>
+                                    <div>
+                                        <h4 className="font-bold text-orange-600 mb-2 uppercase border-b">Jobs</h4>
+                                        {jobsList.map(j => <div key={j.id} className="py-1">#{j.id} {j.name}</div>)}
+                                    </div>
                                 </div>
                             </div>
                         )}
@@ -206,14 +237,21 @@
             );
         }
 
-        // MASTER DATA (Shortened for code size - keep yours full in your file)
+        // FULL DATA LISTS
         function getHGEJobs() {
             return [
                 { id: "102", name: "Seth Nobman Sunny Slope" },
                 { id: "121", name: "Yard Improvements" },
                 { id: "197", name: "I Street" },
+                { id: "201", name: "Olive Street" },
                 { id: "209", name: "Haggerty 3950 I St" },
-                { id: "213", name: "Camp Newman Phase 4" }
+                { id: "211", name: "Olive Street Water" },
+                { id: "213", name: "Camp Newman Phase 4" },
+                { id: "223", name: "Enterprise Road" },
+                { id: "224", name: "Haggerty 3950 Part B" },
+                { id: "226", name: "Grading, Gabion, Grass" },
+                { id: "234", name: "45014 Newman" },
+                { id: "25-008", name: "Granitecreek Pathway" }
             ];
         }
 
@@ -221,16 +259,40 @@
             return [
                 { id: 'eq1', name: 'CAT 320 Excavator', type: 'Owned', category: 'equip' },
                 { id: 'eq2', name: 'JD 310L Backhoe', type: 'Owned', category: 'equip' },
-                { id: 'eq3', name: 'T770 Skidsteer', type: 'Owned', category: 'equip' }
+                { id: 'eq3', name: 'T770 Skidsteer', type: 'Owned', category: 'equip' },
+                { id: 'eq4', name: 'Water Truck 01', type: 'Owned', category: 'equip' },
+                { id: 'eq5', name: 'Dump Truck 01', type: 'Owned', category: 'equip' },
+                { id: 'eq6', name: 'Dump Truck 04', type: 'Owned', category: 'equip' },
+                { id: 'eq7', name: 'Rental Mini-Ex', type: 'Rental', category: 'equip' },
+                { id: 'eq8', name: 'Flatbed Trailer 10', type: 'Owned', category: 'equip' }
             ];
         }
 
         function getDefaultEmployees() {
             return [
                 { id: 1, name: 'Mike Harris', role: 'Supervisor' },
+                { id: 2, name: 'Austin Matsler', role: 'Laborer' },
+                { id: 3, name: 'Benny Shepherd', role: 'Trucker' },
+                { id: 4, name: 'Blake Hartlieb', role: 'Operator' },
                 { id: 5, name: 'Bryan Dolinsek', role: 'Foreman' },
+                { id: 6, name: 'Calvin Young', role: 'Operator' },
+                { id: 7, name: 'Jose Reyes', role: 'Lead' },
+                { id: 8, name: 'Christopher West', role: 'Operator' },
+                { id: 9, name: 'Clayton Setlak', role: 'Laborer' },
+                { id: 10, name: 'Dillon Giacomini', role: 'Operator' },
                 { id: 11, name: 'Dominic Amantite', role: 'Foreman' },
-                { id: 2, name: 'Austin Matsler', role: 'Laborer' }
+                { id: 12, name: 'Dylan Weese', role: 'Foreman' },
+                { id: 13, name: 'Isaias Camacho', role: 'Operator' },
+                { id: 14, name: 'Jaime Gonzalez', role: 'Laborer' },
+                { id: 15, name: 'Marcelo Perez', role: 'Operator' },
+                { id: 16, name: 'Martin Lopez', role: 'Foreman' },
+                { id: 17, name: 'Michael Burchfield', role: 'Super' },
+                { id: 18, name: 'Nikolaos Patridis', role: 'Shop' },
+                { id: 19, name: 'Ruben Flores', role: 'Foreman' },
+                { id: 20, name: 'Sage Gugel', role: 'Operator' },
+                { id: 21, name: 'Tino Rivera', role: 'Trucker' },
+                { id: 22, name: 'Roy Segundo', role: 'Operator' },
+                { id: 23, name: 'Anthony Giamonna', role: 'Operator/Laborer' }
             ];
         }
 
