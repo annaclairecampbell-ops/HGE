@@ -3,36 +3,52 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Construction Dispatch Manager</title>
+    <title>Daily Dispatch Board</title>
+    
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
     <style>
-        .tab-active { border-bottom: 3px solid #3b82f6; color: #3b82f6; }
-        .card-hover:hover { transform: translateY(-2px); transition: all 0.2s; }
+        .draggable { cursor: move; user-select: none; }
+        .draggable:active { opacity: 0.5; }
+        .drop-zone { min-height: 80px; transition: all 0.2s; border-radius: 8px; }
+        .drop-zone.drag-over { background-color: #dbeafe; border: 2px dashed #3b82f6; }
+        .crew-badge { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
+        .equipment-badge { background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); }
+        .assignment-card { animation: slideIn 0.3s ease-out; }
+        @keyframes slideIn { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
+        .tab-active { border-bottom: 3px solid #2563eb; color: #2563eb; }
     </style>
 </head>
-<body class="bg-gray-100">
+<body class="bg-gray-50">
     <div id="app"></div>
 
     <script type="text/babel">
-        const { useState, useEffect } = React;
+        const { useState, useEffect, useRef } = React;
 
         function DispatchApp() {
-            const [activeTab, setActiveTab] = useState('dispatch');
             const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
-            
-            // State for Data
-            const [employees, setEmployees] = useState(() => JSON.parse(localStorage.getItem('hge_employees')) || [
-                { id: '1', name: 'John Doe', role: 'Foreman', email: 'john@hge.com' },
-                { id: '2', name: 'Jane Smith', role: 'Operator', email: 'jane@hge.com' }
-            ]);
-            
-            const [jobs, setJobs] = useState(() => JSON.parse(localStorage.getItem('hge_jobs')) || []);
+            const [activeTab, setActiveTab] = useState('schedule');
+            const [draggedItem, setDraggedItem] = useState(null);
 
-            // Auto-save to LocalStorage
+            // Data State with LocalStorage
+            const [employees, setEmployees] = useState(() => JSON.parse(localStorage.getItem('hge_employees')) || getDefaultEmployees());
+            const [crews, setCrews] = useState(() => JSON.parse(localStorage.getItem('hge_crews')) || getDefaultCrews());
+            const [equipment, setEquipment] = useState(() => JSON.parse(localStorage.getItem('hge_equipment')) || getDefaultEquipment());
+            const [assignments, setAssignments] = useState(() => JSON.parse(localStorage.getItem('hge_assignments')) || []);
+
+            // Auto-Save
             useEffect(() => {
                 localStorage.setItem('hge_employees', JSON.stringify(employees));
-                localStorage.
+                localStorage.setItem('hge_crews', JSON.stringify(crews));
+                localStorage.setItem('hge_equipment', JSON.stringify(equipment));
+                localStorage.setItem('hge_assignments', JSON.stringify(assignments));
+            }, [employees, crews, equipment, assignments]);
+
+            return (
+                <div className="min-h-screen">
+                    <header className="bg-blue-800 text-white shadow-lg p-6">
+                        <h1 className="text-3xl font-bold"><i className="fas fa-calendar-day
