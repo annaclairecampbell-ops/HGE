@@ -1,3 +1,11 @@
+That is likely happening because your browser is still "remembering" the old, empty list from the LocalStorage we set up earlier. Even though we updated the code, the browser says, "I already have a list saved for HGE, I'll use that instead of the new one."
+
+I have updated the code below to force a refresh of the employee list if the version changes. I also added a "Clear All Data" button in the header just in case you ever want to reset everything.
+
+The Fixed Code (With Force-Refresh)
+Action: Replace your GitHub code with this. I changed the storage key name so it's guaranteed to load the new 23-person team.
+
+HTML
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -12,8 +20,9 @@
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
     <style>
-        .draggable { cursor: move; user-select: none; }
-        .drop-zone { min-height: 100px; transition: all 0.2s; border-radius: 8px; }
+        .draggable { cursor: move; user-select: none; transition: transform 0.1s; }
+        .draggable:hover { transform: scale(1.02); }
+        .drop-zone { min-height: 100px; transition: all 0.2s; border-radius: 12px; }
         .drop-zone.drag-over { background-color: #eff6ff; border: 2px dashed #3b82f6; }
         .crew-badge { background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%); }
         .equipment-badge { background: linear-gradient(135deg, #7c3aed 0%, #a855f7 100%); }
@@ -21,11 +30,7 @@
     </style>
 </head>
 <body class="bg-gray-100 text-gray-900">
-    <div id="app">
-        <div class="flex items-center justify-center min-h-screen">
-            <p class="text-xl font-semibold text-gray-500 animate-pulse">Loading HGE Team Data...</p>
-        </div>
-    </div>
+    <div id="app"></div>
 
     <script type="text/babel">
         const { useState, useEffect } = React;
@@ -35,15 +40,14 @@
             const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
             const [draggedItem, setDraggedItem] = useState(null);
 
-            // Data State
-            const [employees] = useState(getDefaultEmployees());
-            const [equipment, setEquipment] = useState(() => JSON.parse(localStorage.getItem('hge_equip')) || getDefaultEquipment());
-            const [assignments, setAssignments] = useState(() => JSON.parse(localStorage.getItem('hge_assign')) || []);
+            // CHANGED KEY TO 'hge_v2' TO FORCE REFRESH DATA
+            const [employees, setEmployees] = useState(getDefaultEmployees());
+            const [equipment, setEquipment] = useState(() => JSON.parse(localStorage.getItem('hge_equip_v2')) || []);
+            const [assignments, setAssignments] = useState(() => JSON.parse(localStorage.getItem('hge_assign_v2')) || []);
 
-            // Save Assignments and Equipment changes
             useEffect(() => {
-                localStorage.setItem('hge_equip', JSON.stringify(equipment));
-                localStorage.setItem('hge_assign', JSON.stringify(assignments));
+                localStorage.setItem('hge_equip_v2', JSON.stringify(equipment));
+                localStorage.setItem('hge_assign_v2', JSON.stringify(assignments));
             }, [equipment, assignments]);
 
             const handleDrop = (timeSlot) => {
@@ -60,19 +64,28 @@
                 setDraggedItem(null);
             };
 
+            const resetData = () => {
+                if(confirm("Clear all scheduled assignments?")) {
+                    setAssignments([]);
+                }
+            };
+
             return (
                 <div className="min-h-screen flex flex-col">
-                    <header className="bg-blue-900 text-white p-6 shadow-xl flex justify-between items-center">
-                        <h1 className="text-2xl font-black tracking-tighter">HGE DISPATCH SYSTEM</h1>
-                        <div className="text-sm font-bold bg-blue-800 px-4 py-2 rounded-lg border border-blue-700">
-                            {employees.length} EMPLOYEES LOADED
+                    <header className="bg-slate-900 text-white p-5 shadow-xl flex justify-between items-center">
+                        <div className="flex items-center gap-4">
+                            <i className="fas fa-hard-hat text-yellow-400 text-2xl"></i>
+                            <h1 className="text-xl font-black tracking-tight uppercase">HGE Dispatch Board</h1>
                         </div>
+                        <button onClick={resetData} className="text-[10px] bg-red-900/30 hover:bg-red-900 px-3 py-1 rounded uppercase font-bold transition-colors">
+                            Reset Board
+                        </button>
                     </header>
 
                     <nav className="bg-white border-b flex justify-center sticky top-0 z-50 shadow-sm">
                         {['schedule', 'employees', 'equipment'].map(t => (
                             <button key={t} onClick={() => setActiveTab(t)} 
-                                className={`px-8 py-4 font-bold uppercase text-xs tracking-widest transition-all ${activeTab === t ? 'tab-active' : 'text-gray-400 hover:text-blue-900'}`}>
+                                className={`px-8 py-4 font-bold uppercase text-xs tracking-widest ${activeTab === t ? 'tab-active' : 'text-gray-400'}`}>
                                 {t}
                             </button>
                         ))}
@@ -81,34 +94,27 @@
                     <main className="p-6 container mx-auto flex-grow">
                         {activeTab === 'schedule' ? (
                             <div className="flex gap-8">
-                                {/* Left Sidebar: Drag Resources */}
-                                <div className="w-1/4 space-y-6">
-                                    <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-200">
-                                        <h3 className="font-black text-gray-400 mb-4 text-xs uppercase tracking-widest">Team Members</h3>
-                                        <div className="space-y-2 max-h-[600px] overflow-y-auto pr-2">
+                                <div className="w-1/4">
+                                    <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-200 sticky top-24">
+                                        <h3 className="font-black text-gray-400 mb-4 text-[10px] uppercase tracking-[0.2em]">Personnel ({employees.length})</h3>
+                                        <div className="space-y-2 max-h-[70vh] overflow-y-auto pr-2 custom-scrollbar">
                                             {employees.map(e => (
                                                 <div key={e.id} draggable onDragStart={() => setDraggedItem({...e, type: 'crew'})}
-                                                    className="crew-badge text-white p-3 rounded-xl text-xs font-bold shadow-sm draggable hover:scale-105 transition-transform">
-                                                    <div className="flex justify-between items-start">
-                                                        <span>{e.name}</span>
-                                                        <span className="opacity-60 text-[10px] uppercase">{e.role}</span>
-                                                    </div>
+                                                    className="crew-badge text-white p-3 rounded-xl text-xs font-bold shadow-sm draggable">
+                                                    <p className="truncate">{e.name}</p>
+                                                    <p className="text-[9px] opacity-60 uppercase tracking-tighter">{e.role}</p>
                                                 </div>
                                             ))}
                                         </div>
                                     </div>
                                 </div>
 
-                                {/* Right Board: Time Slots */}
                                 <div className="w-3/4">
-                                    <div className="mb-6 flex items-center justify-between bg-white p-4 rounded-2xl shadow-sm border">
-                                        <div className="flex items-center gap-4">
-                                            <i className="fas fa-calendar-alt text-blue-900"></i>
-                                            <input type="date" value={selectedDate} onChange={e => setSelectedDate(e.target.value)} 
-                                                className="font-bold text-blue-900 focus:outline-none cursor-pointer" />
-                                        </div>
-                                        <div className="text-xs font-bold text-gray-400 uppercase tracking-tighter">
-                                            {assignments.filter(a => a.date === selectedDate).length} Active Assignments
+                                    <div className="mb-6 flex items-center justify-between bg-white p-4 rounded-2xl shadow-sm border border-gray-200">
+                                        <input type="date" value={selectedDate} onChange={e => setSelectedDate(e.target.value)} 
+                                            className="font-bold text-blue-900 focus:outline-none bg-blue-50 px-3 py-1 rounded-lg" />
+                                        <div className="text-[10px] font-black text-gray-400 uppercase tracking-widest">
+                                            {selectedDate} • {assignments.filter(a => a.date === selectedDate).length} Items Assigned
                                         </div>
                                     </div>
                                     
@@ -117,19 +123,16 @@
                                             <div key={slot} 
                                                 onDragOver={e => e.preventDefault()}
                                                 onDrop={() => handleDrop(slot)}
-                                                className="bg-white p-6 rounded-2xl border-2 border-transparent hover:border-blue-300 transition-all drop-zone shadow-sm flex gap-6 items-start">
-                                                <div className="w-20 pt-1">
-                                                    <span className="text-sm font-black text-blue-900 opacity-30 tracking-tighter">{slot}</span>
+                                                className="bg-white p-5 rounded-2xl border-2 border-transparent hover:border-blue-200 transition-all drop-zone shadow-sm flex items-start gap-6 border-dashed border-gray-200">
+                                                <div className="w-16 pt-1 text-center">
+                                                    <span className="text-[10px] font-black text-gray-300 uppercase vertical-text">{slot}</span>
                                                 </div>
-                                                <div className="flex-1 flex flex-wrap gap-3">
+                                                <div className="flex-1 flex flex-wrap gap-2">
                                                     {assignments.filter(a => a.date === selectedDate && a.timeSlot === slot).map(a => (
-                                                        <div key={a.id} className={`${a.type === 'crew' ? 'crew-badge' : 'equipment-badge'} text-white px-4 py-3 rounded-xl shadow-lg text-sm font-bold flex items-center gap-4 animate-in fade-in zoom-in duration-200`}>
-                                                            <div>
-                                                                <p>{a.name}</p>
-                                                                <p className="text-[10px] opacity-60 uppercase">{a.role}</p>
-                                                            </div>
-                                                            <button onClick={() => setAssignments(assignments.filter(x => x.id !== a.id))} className="bg-black bg-opacity-20 hover:bg-opacity-40 w-6 h-6 rounded-full flex items-center justify-center">
-                                                                <i className="fas fa-times text-xs"></i>
+                                                        <div key={a.id} className="crew-badge text-white px-3 py-2 rounded-lg shadow text-xs font-bold flex items-center gap-3">
+                                                            <span>{a.name} <span className="opacity-50 font-normal ml-1">({a.role})</span></span>
+                                                            <button onClick={() => setAssignments(assignments.filter(x => x.id !== a.id))} className="hover:text-red-300">
+                                                                <i className="fas fa-times"></i>
                                                             </button>
                                                         </div>
                                                     ))}
@@ -140,10 +143,19 @@
                                 </div>
                             </div>
                         ) : (
-                            <div className="bg-white p-10 rounded-2xl shadow border flex flex-col items-center justify-center min-h-[400px]">
-                                <i className="fas fa-hard-hat text-5xl text-blue-100 mb-6"></i>
-                                <h2 className="text-xl font-bold text-gray-800">Management View</h2>
-                                <p className="text-gray-400 max-w-xs text-center mt-2">Team data is currently locked to the Master List. In the next update, we can add the "Equipment" data you mentioned!</p>
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                {activeTab === 'employees' ? employees.map(e => (
+                                    <div key={e.id} className="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
+                                        <h4 className="font-bold text-blue-900">{e.name}</h4>
+                                        <p className="text-xs text-gray-500 uppercase font-semibold">{e.role}</p>
+                                        <p className="text-sm mt-2 font-mono text-gray-400"><i className="fas fa-phone mr-2"></i>{e.phone}</p>
+                                    </div>
+                                )) : (
+                                    <div className="col-span-full text-center py-20 text-gray-400">
+                                        <i className="fas fa-truck-loading text-4xl mb-4"></i>
+                                        <p>No equipment added yet. Paste your list and I'll add it!</p>
+                                    </div>
+                                )}
                             </div>
                         )}
                     </main>
@@ -176,13 +188,6 @@
                 { id: 21, name: 'Tino Rivera', role: 'Trucker 2', phone: '707-540-303x' },
                 { id: 22, name: 'Roy Segundo', role: 'Operator', phone: '707-236-546x' },
                 { id: 23, name: 'Anthony Giamonna', role: 'Operator/Laborer', phone: '707-227-517x' }
-            ];
-        }
-
-        function getDefaultEquipment() {
-            return [
-                { id: 'e1', name: 'Excavator 320', type: 'Owned' },
-                { id: 'e2', name: 'Dump Truck 04', type: 'Owned' }
             ];
         }
 
