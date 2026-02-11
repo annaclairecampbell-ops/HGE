@@ -1,11 +1,99 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>Success!</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Construction Dispatch Manager</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <style>
+        .crew-card { transition: all 0.3s ease; }
+        .crew-card:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
+        .status-available { background-color: #10b981; }
+        .status-assigned { background-color: #3b82f6; }
+        .status-unavailable { background-color: #ef4444; }
+        .equipment-tag { display: inline-block; padding: 4px 8px; margin: 2px; border-radius: 4px; font-size: 0.75rem; }
+        .tab-active { border-bottom: 3px solid #3b82f6; color: #3b82f6; }
+    </style>
 </head>
-<body style="background-color: #f0f8ff; text-align: center; padding-top: 50px; font-family: sans-serif;">
-    <h1>🏗️ HGE Dispatch System</h1>
-    <p>If you can see this, your GitHub Page is officially LIVE!</p>
-    <div style="font-size: 50px;">🚀</div>
+<body class="bg-gray-50">
+    <div id="app"></div>
+
+    <script type="text/babel">
+        // Use Global variables instead of 'import'
+        const { useState, useEffect } = React;
+
+        // --- MOCK DATA GENERATORS ---
+        const getDefaultEmployees = () => [
+            { id: '1', firstName: 'John', lastName: 'Doe', role: 'Foreman', email: 'john@example.com', available: true },
+            { id: '2', firstName: 'Jane', lastName: 'Smith', role: 'Operator', email: 'jane@example.com', available: true }
+        ];
+        const getDefaultCrews = () => [{ id: 'c1', name: 'Foundation Crew A', members: ['1', '2'] }];
+        const getDefaultEquipment = () => [
+            { id: 'e1', name: 'Excavator 320G', type: 'owned' },
+            { id: 'e2', name: 'Cement Mixer', type: 'rental' }
+        ];
+
+        // --- COMPONENTS ---
+
+        function DispatchApp() {
+            const [activeTab, setActiveTab] = useState('dispatch');
+            const [employees, setEmployees] = useState(getDefaultEmployees());
+            const [crews, setCrews] = useState(getDefaultCrews());
+            const [equipment, setEquipment] = useState(getDefaultEquipment());
+            const [jobs, setJobs] = useState([]);
+            const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+
+            return (
+                <div className="min-h-screen">
+                    <header className="bg-blue-600 text-white shadow-lg">
+                        <div className="container mx-auto px-4 py-4">
+                            <h1 className="text-3xl font-bold"><i className="fas fa-hard-hat mr-3"></i>Dispatch Manager</h1>
+                        </div>
+                    </header>
+
+                    <nav className="bg-white shadow-md sticky top-0 z-10">
+                        <div className="container mx-auto px-4 flex space-x-8">
+                            {['dispatch', 'employees', 'crews', 'equipment'].map(tab => (
+                                <button key={tab} onClick={() => setActiveTab(tab)} 
+                                    className={`py-4 px-2 font-semibold capitalize ${activeTab === tab ? 'tab-active' : 'text-gray-600'}`}>
+                                    {tab}
+                                </button>
+                            ))}
+                        </div>
+                    </nav>
+
+                    <main className="container mx-auto px-4 py-6">
+                        {activeTab === 'dispatch' && (
+                            <div className="bg-white p-6 rounded shadow">
+                                <h2 className="text-xl font-bold mb-4">Board for {selectedDate}</h2>
+                                <input type="date" value={selectedDate} onChange={(e) => setSelectedDate(e.target.value)} className="border p-2 rounded mb-4" />
+                                <p className="text-gray-500 italic">Dispatch system active. Ready to assign crews.</p>
+                            </div>
+                        )}
+                        {activeTab === 'employees' && (
+                             <div className="grid md:grid-cols-2 gap-4">
+                                {employees.map(emp => (
+                                    <div key={emp.id} className="bg-white p-4 rounded shadow border-l-4 border-green-500">
+                                        <h3 className="font-bold">{emp.firstName} {emp.lastName}</h3>
+                                        <p className="text-sm text-gray-600">{emp.role}</p>
+                                        <p className="text-xs text-blue-500">{emp.email}</p>
+                                    </div>
+                                ))}
+                             </div>
+                        )}
+                        {/* Additional views would go here */}
+                    </main>
+                </div>
+            );
+        }
+
+        // --- RENDER ---
+        const root = ReactDOM.createRoot(document.getElementById('app'));
+        root.render(<DispatchApp />);
+    </script>
 </body>
 </html>
