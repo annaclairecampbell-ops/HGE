@@ -1,0 +1,1201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Construction Dispatch Manager</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        .crew-card { transition: all 0.3s ease; }
+        .crew-card:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
+        .status-available { background-color: #10b981; }
+        .status-assigned { background-color: #3b82f6; }
+        .status-unavailable { background-color: #ef4444; }
+        .equipment-tag { display: inline-block; padding: 4px 8px; margin: 2px; border-radius: 4px; font-size: 0.75rem; }
+        .tab-active { border-bottom: 3px solid #3b82f6; color: #3b82f6; }
+    </style>
+</head>
+<body class="bg-gray-50">
+    <div id="app"></div>
+
+    <script type="module">
+        import React, { useState, useEffect } from 'react';
+        import ReactDOM from 'react-dom/client';
+
+        // Main App Component
+        function DispatchApp() {
+            const [activeTab, setActiveTab] = useState('dispatch');
+            const [employees, setEmployees] = useState([]);
+            const [crews, setCrews] = useState([]);
+            const [equipment, setEquipment] = useState([]);
+            const [jobs, setJobs] = useState([]);
+            const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+
+            // Load data from storage on mount
+            useEffect(() => {
+                loadData();
+            }, []);
+
+            const loadData = async () => {
+                try {
+                    const [empData, crewData, equipData, jobData] = await Promise.all([
+                        window.storage?.get('employees', false).catch(() => null),
+                        window.storage?.get('crews', false).catch(() => null),
+                        window.storage?.get('equipment', false).catch(() => null),
+                        window.storage?.get('jobs', false).catch(() => null)
+                    ]);
+
+                    setEmployees(empData?.value ? JSON.parse(empData.value) : getDefaultEmployees());
+                    setCrews(crewData?.value ? JSON.parse(crewData.value) : getDefaultCrews());
+                    setEquipment(equipData?.value ? JSON.parse(equipData.value) : getDefaultEquipment());
+                    setJobs(jobData?.value ? JSON.parse(jobData.value) : []);
+                } catch (err) {
+                    console.log('Loading default data');
+                    setEmployees(getDefaultEmployees());
+                    setCrews(getDefaultCrews());
+                    setEquipment(getDefaultEquipment());
+                    setJobs([]);
+                }
+            };
+
+            const saveData = async (type, data) => {
+                try {
+                    await window.storage?.set(type, JSON.stringify(data), false);
+                } catch (err) {
+                    console.error('Save error:', err);
+                }
+            };
+
+            useEffect(() => { saveData('employees', employees); }, [employees]);
+            useEffect(() => { saveData('crews', crews); }, [crews]);
+            useEffect(() => { saveData('equipment', equipment); }, [equipment]);
+            useEffect(() => { saveData('jobs', jobs); }, [jobs]);
+
+            return (
+                <div className="min-h-screen">
+                    {/* Header */}
+                    <header className="bg-blue-600 text-white shadow-lg">
+                        <div className="container mx-auto px-4 py-4">
+                            <h1 className="text-3xl font-bold"><i className="fas fa-hard-hat mr-3"></i>Dispatch Manager</h1>
+                            <p className="text-blue-100 mt-1">Construction Crew & Equipment Scheduling</p>
+                        </div>
+                    </header>
+
+                    {/* Navigation Tabs */}
+                    <nav className="bg-white shadow-md sticky top-0 z-10">
+                        <div className="container mx-auto px-4">
+                            <div className="flex space-x-8">
+                                {[
+                                    { id: 'dispatch', icon: 'calendar-alt', label: 'Dispatch Board' },
+                                    { id: 'employees', icon: 'users', label: 'Employees' },
+                                    { id: 'crews', icon: 'user-friends', label: 'Crews' },
+                                    { id: 'equipment', icon: 'truck', label: 'Equipment' }
+                                ].map(tab => (
+                                    <button
+                                        key={tab.id}
+                                        onClick={() => setActiveTab(tab.id)}
+                                        className={`py-4 px-2 font-semibold transition-all ${activeTab === tab.id ? 'tab-active' : 'text-gray-600 hover:text-blue-600'}`}
+                                    >
+                                        <i className={`fas fa-${tab.icon} mr-2`}></i>
+                                        {tab.label}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                    </nav>
+
+                    {/* Main Content */}
+                    <main className="container mx-auto px-4 py-6">
+                        {activeTab === 'dispatch' && (
+                            <DispatchBoard 
+                                jobs={jobs} 
+                                setJobs={setJobs} 
+                                crews={crews} 
+                                employees={employees}
+                                equipment={equipment}
+                                selectedDate={selectedDate}
+                                setSelectedDate={setSelectedDate}
+                            />
+                        )}
+                        {activeTab === 'employees' && (
+                            <EmployeeManager employees={employees} setEmployees={setEmployees} />
+                        )}
+                        {activeTab === 'crews' && (
+                            <CrewManager crews={crews} setCrews={setCrews} employees={employees} />
+                        )}
+                        {activeTab === 'equipment' && (
+                            <EquipmentManager equipment={equipment} setEquipment={setEquipment} />
+                        )}
+                    </main>
+                </div>
+            );
+        }
+
+        // Dispatch Board Component
+        function DispatchBoard({ jobs, setJobs, crews, employees, equipment, selectedDate, setSelectedDate }) {
+            const [showJobModal, setShowJobModal] = useState(false);
+            const [editingJob, setEditingJob] = useState(null);
+
+            const todaysJobs = jobs.filter(job => job.date === selectedDate);
+
+            const handleAddJob = (jobData) => {
+                if (editingJob) {
+                    setJobs(jobs.map(j => j.id === editingJob.id ? { ...jobData, id: editingJob.id } : j));
+                } else {
+                    setJobs([...jobs, { ...jobData, id: Date.now().toString() }]);
+                }
+                setShowJobModal(false);
+                setEditingJob(null);
+            };
+
+            const handleDeleteJob = (jobId) => {
+                if (confirm('Delete this job assignment?')) {
+                    setJobs(jobs.filter(j => j.id !== jobId));
+                }
+            };
+
+            const handleSendNotifications = () => {
+                const emailList = todaysJobs.map(job => {
+                    const crew = crews.find(c => c.id === job.crewId);
+                    const crewMembers = crew?.members.map(mid => 
+                        employees.find(e => e.id === mid)
+                    ).filter(Boolean) || [];
+                    
+                    return {
+                        job: job.jobName,
+                        location: job.location,
+                        crew: crew?.name || 'Unassigned',
+                        members: crewMembers.map(m => `${m.firstName} ${m.lastName}`).join(', ')
+                    };
+                });
+
+                alert(`Email notifications would be sent for ${todaysJobs.length} jobs:\n\n${emailList.map(e => 
+                    `Job: ${e.job}\nLocation: ${e.location}\nCrew: ${e.crew}\nMembers: ${e.members}`
+                ).join('\n\n---\n\n')}\n\nNote: Connect to an email service (SendGrid, AWS SES, etc.) to enable actual email sending.`);
+            };
+
+            return (
+                <div>
+                    <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+                        <div className="flex justify-between items-center mb-4">
+                            <div>
+                                <h2 className="text-2xl font-bold text-gray-800">Daily Dispatch - {new Date(selectedDate).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</h2>
+                                <p className="text-gray-600">{todaysJobs.length} job(s) scheduled</p>
+                            </div>
+                            <div className="flex gap-3">
+                                <input
+                                    type="date"
+                                    value={selectedDate}
+                                    onChange={(e) => setSelectedDate(e.target.value)}
+                                    className="border border-gray-300 rounded-lg px-4 py-2"
+                                />
+                                <button
+                                    onClick={() => setShowJobModal(true)}
+                                    className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition"
+                                >
+                                    <i className="fas fa-plus mr-2"></i>Add Job
+                                </button>
+                                {todaysJobs.length > 0 && (
+                                    <button
+                                        onClick={handleSendNotifications}
+                                        className="bg-green-600 text-white px-6 py-2 rounded-lg hover:bg-green-700 transition"
+                                    >
+                                        <i className="fas fa-envelope mr-2"></i>Send Notifications
+                                    </button>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Jobs List */}
+                    <div className="space-y-4">
+                        {todaysJobs.length === 0 ? (
+                            <div className="bg-white rounded-lg shadow-md p-12 text-center">
+                                <i className="fas fa-calendar-times text-6xl text-gray-300 mb-4"></i>
+                                <p className="text-gray-500 text-lg">No jobs scheduled for this date</p>
+                                <button
+                                    onClick={() => setShowJobModal(true)}
+                                    className="mt-4 text-blue-600 hover:text-blue-800"
+                                >
+                                    Click to add a job
+                                </button>
+                            </div>
+                        ) : (
+                            todaysJobs.map(job => (
+                                <JobCard
+                                    key={job.id}
+                                    job={job}
+                                    crews={crews}
+                                    employees={employees}
+                                    equipment={equipment}
+                                    onEdit={() => { setEditingJob(job); setShowJobModal(true); }}
+                                    onDelete={() => handleDeleteJob(job.id)}
+                                />
+                            ))
+                        )}
+                    </div>
+
+                    {showJobModal && (
+                        <JobModal
+                            onClose={() => { setShowJobModal(false); setEditingJob(null); }}
+                            onSave={handleAddJob}
+                            crews={crews}
+                            equipment={equipment}
+                            selectedDate={selectedDate}
+                            editingJob={editingJob}
+                        />
+                    )}
+                </div>
+            );
+        }
+
+        // Job Card Component
+        function JobCard({ job, crews, employees, equipment, onEdit, onDelete }) {
+            const crew = crews.find(c => c.id === job.crewId);
+            const crewMembers = crew?.members.map(mid => employees.find(e => e.id === mid)).filter(Boolean) || [];
+            const assignedEquipment = job.equipment.map(eid => equipment.find(e => e.id === eid)).filter(Boolean);
+
+            return (
+                <div className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition">
+                    <div className="flex justify-between items-start mb-4">
+                        <div className="flex-1">
+                            <h3 className="text-xl font-bold text-gray-800 mb-1">{job.jobName}</h3>
+                            <p className="text-gray-600"><i className="fas fa-map-marker-alt mr-2"></i>{job.location}</p>
+                        </div>
+                        <div className="flex gap-2">
+                            <button onClick={onEdit} className="text-blue-600 hover:text-blue-800 p-2">
+                                <i className="fas fa-edit"></i>
+                            </button>
+                            <button onClick={onDelete} className="text-red-600 hover:text-red-800 p-2">
+                                <i className="fas fa-trash"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div className="grid md:grid-cols-3 gap-6">
+                        {/* Crew Assignment */}
+                        <div>
+                            <h4 className="font-semibold text-gray-700 mb-2">
+                                <i className="fas fa-users mr-2"></i>Assigned Crew
+                            </h4>
+                            {crew ? (
+                                <div>
+                                    <p className="font-medium text-blue-600 mb-2">{crew.name}</p>
+                                    <div className="space-y-1">
+                                        {crewMembers.map(member => (
+                                            <div key={member.id} className="text-sm text-gray-600 flex items-center">
+                                                <i className="fas fa-user text-xs mr-2"></i>
+                                                {member.firstName} {member.lastName}
+                                                <span className="ml-2 text-xs text-gray-500">({member.role})</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            ) : (
+                                <p className="text-gray-400 italic">No crew assigned</p>
+                            )}
+                        </div>
+
+                        {/* Equipment */}
+                        <div>
+                            <h4 className="font-semibold text-gray-700 mb-2">
+                                <i className="fas fa-truck mr-2"></i>Equipment
+                            </h4>
+                            {assignedEquipment.length > 0 ? (
+                                <div className="space-y-1">
+                                    {assignedEquipment.map(eq => (
+                                        <div key={eq.id} className="flex items-center justify-between text-sm">
+                                            <span className="text-gray-700">{eq.name}</span>
+                                            <span className={`equipment-tag ${eq.type === 'rental' ? 'bg-orange-100 text-orange-800' : 'bg-green-100 text-green-800'}`}>
+                                                {eq.type === 'rental' ? 'Rental' : 'Owned'}
+                                            </span>
+                                        </div>
+                                    ))}
+                                </div>
+                            ) : (
+                                <p className="text-gray-400 italic">No equipment assigned</p>
+                            )}
+                        </div>
+
+                        {/* Job Details */}
+                        <div>
+                            <h4 className="font-semibold text-gray-700 mb-2">
+                                <i className="fas fa-clipboard-list mr-2"></i>Details
+                            </h4>
+                            <div className="space-y-1 text-sm">
+                                <p className="text-gray-600"><strong>Time:</strong> {job.startTime || 'Not set'}</p>
+                                <p className="text-gray-600"><strong>Duration:</strong> {job.duration || 'Not set'}</p>
+                                {job.notes && (
+                                    <p className="text-gray-600 mt-2"><strong>Notes:</strong> {job.notes}</p>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        // Job Modal Component
+        function JobModal({ onClose, onSave, crews, equipment, selectedDate, editingJob }) {
+            const [formData, setFormData] = useState(editingJob || {
+                jobName: '',
+                location: '',
+                date: selectedDate,
+                startTime: '07:00',
+                duration: '8 hours',
+                crewId: '',
+                equipment: [],
+                notes: ''
+            });
+
+            const handleSubmit = (e) => {
+                e.preventDefault();
+                onSave(formData);
+            };
+
+            return (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+                    <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+                        <div className="p-6">
+                            <div className="flex justify-between items-center mb-4">
+                                <h2 className="text-2xl font-bold">{editingJob ? 'Edit Job' : 'Add New Job'}</h2>
+                                <button onClick={onClose} className="text-gray-500 hover:text-gray-700">
+                                    <i className="fas fa-times text-xl"></i>
+                                </button>
+                            </div>
+
+                            <form onSubmit={handleSubmit} className="space-y-4">
+                                <div className="grid md:grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">Job Name *</label>
+                                        <input
+                                            type="text"
+                                            required
+                                            value={formData.jobName}
+                                            onChange={(e) => setFormData({...formData, jobName: e.target.value})}
+                                            className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                                            placeholder="e.g., Building Foundation"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">Location *</label>
+                                        <input
+                                            type="text"
+                                            required
+                                            value={formData.location}
+                                            onChange={(e) => setFormData({...formData, location: e.target.value})}
+                                            className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                                            placeholder="e.g., 123 Main St"
+                                        />
+                                    </div>
+                                </div>
+
+                                <div className="grid md:grid-cols-3 gap-4">
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">Date *</label>
+                                        <input
+                                            type="date"
+                                            required
+                                            value={formData.date}
+                                            onChange={(e) => setFormData({...formData, date: e.target.value})}
+                                            className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">Start Time</label>
+                                        <input
+                                            type="time"
+                                            value={formData.startTime}
+                                            onChange={(e) => setFormData({...formData, startTime: e.target.value})}
+                                            className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">Duration</label>
+                                        <input
+                                            type="text"
+                                            value={formData.duration}
+                                            onChange={(e) => setFormData({...formData, duration: e.target.value})}
+                                            className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                                            placeholder="e.g., 8 hours"
+                                        />
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Assign Crew</label>
+                                    <select
+                                        value={formData.crewId}
+                                        onChange={(e) => setFormData({...formData, crewId: e.target.value})}
+                                        className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                                    >
+                                        <option value="">Select a crew...</option>
+                                        {crews.map(crew => (
+                                            <option key={crew.id} value={crew.id}>
+                                                {crew.name} ({crew.members.length} members)
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">Equipment</label>
+                                    <div className="border border-gray-300 rounded-lg p-3 max-h-48 overflow-y-auto">
+                                        {equipment.map(eq => (
+                                            <label key={eq.id} className="flex items-center space-x-2 mb-2 cursor-pointer hover:bg-gray-50 p-2 rounded">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={formData.equipment.includes(eq.id)}
+                                                    onChange={(e) => {
+                                                        if (e.target.checked) {
+                                                            setFormData({...formData, equipment: [...formData.equipment, eq.id]});
+                                                        } else {
+                                                            setFormData({...formData, equipment: formData.equipment.filter(id => id !== eq.id)});
+                                                        }
+                                                    }}
+                                                    className="rounded"
+                                                />
+                                                <span className="flex-1">{eq.name}</span>
+                                                <span className={`equipment-tag ${eq.type === 'rental' ? 'bg-orange-100 text-orange-800' : 'bg-green-100 text-green-800'}`}>
+                                                    {eq.type === 'rental' ? 'Rental' : 'Owned'}
+                                                </span>
+                                            </label>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Notes</label>
+                                    <textarea
+                                        value={formData.notes}
+                                        onChange={(e) => setFormData({...formData, notes: e.target.value})}
+                                        className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                                        rows="3"
+                                        placeholder="Special instructions, materials needed, etc."
+                                    ></textarea>
+                                </div>
+
+                                <div className="flex justify-end gap-3 pt-4">
+                                    <button
+                                        type="button"
+                                        onClick={onClose}
+                                        className="px-6 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button
+                                        type="submit"
+                                        className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                                    >
+                                        {editingJob ? 'Update Job' : 'Add Job'}
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        // Employee Manager Component
+        function EmployeeManager({ employees, setEmployees }) {
+            const [showModal, setShowModal] = useState(false);
+            const [editingEmployee, setEditingEmployee] = useState(null);
+
+            const handleSave = (empData) => {
+                if (editingEmployee) {
+                    setEmployees(employees.map(e => e.id === editingEmployee.id ? {...empData, id: editingEmployee.id} : e));
+                } else {
+                    setEmployees([...employees, {...empData, id: Date.now().toString()}]);
+                }
+                setShowModal(false);
+                setEditingEmployee(null);
+            };
+
+            const handleDelete = (id) => {
+                if (confirm('Delete this employee?')) {
+                    setEmployees(employees.filter(e => e.id !== id));
+                }
+            };
+
+            const toggleAvailability = (id) => {
+                setEmployees(employees.map(e => 
+                    e.id === id ? {...e, available: !e.available} : e
+                ));
+            };
+
+            return (
+                <div>
+                    <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+                        <div className="flex justify-between items-center">
+                            <div>
+                                <h2 className="text-2xl font-bold text-gray-800">Employee Management</h2>
+                                <p className="text-gray-600">{employees.length} total employees</p>
+                            </div>
+                            <button
+                                onClick={() => setShowModal(true)}
+                                className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700"
+                            >
+                                <i className="fas fa-plus mr-2"></i>Add Employee
+                            </button>
+                        </div>
+                    </div>
+
+                    <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {employees.map(emp => (
+                            <div key={emp.id} className="bg-white rounded-lg shadow-md p-4 crew-card">
+                                <div className="flex justify-between items-start mb-3">
+                                    <div className="flex-1">
+                                        <h3 className="font-bold text-lg text-gray-800">
+                                            {emp.firstName} {emp.lastName}
+                                        </h3>
+                                        <p className="text-sm text-gray-600">{emp.role}</p>
+                                    </div>
+                                    <div className="flex gap-1">
+                                        <button
+                                            onClick={() => { setEditingEmployee(emp); setShowModal(true); }}
+                                            className="text-blue-600 hover:text-blue-800 p-1"
+                                        >
+                                            <i className="fas fa-edit"></i>
+                                        </button>
+                                        <button
+                                            onClick={() => handleDelete(emp.id)}
+                                            className="text-red-600 hover:text-red-800 p-1"
+                                        >
+                                            <i className="fas fa-trash"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                                <div className="space-y-2 text-sm">
+                                    <p className="text-gray-600">
+                                        <i className="fas fa-envelope mr-2"></i>{emp.email}
+                                    </p>
+                                    <p className="text-gray-600">
+                                        <i className="fas fa-phone mr-2"></i>{emp.phone}
+                                    </p>
+                                    <div className="flex items-center justify-between pt-2 border-t">
+                                        <span className="text-gray-700 font-medium">Availability:</span>
+                                        <button
+                                            onClick={() => toggleAvailability(emp.id)}
+                                            className={`px-3 py-1 rounded-full text-white text-xs font-semibold ${emp.available ? 'status-available' : 'status-unavailable'}`}
+                                        >
+                                            {emp.available ? 'Available' : 'Unavailable'}
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+
+                    {showModal && (
+                        <EmployeeModal
+                            onClose={() => { setShowModal(false); setEditingEmployee(null); }}
+                            onSave={handleSave}
+                            editingEmployee={editingEmployee}
+                        />
+                    )}
+                </div>
+            );
+        }
+
+        // Employee Modal
+        function EmployeeModal({ onClose, onSave, editingEmployee }) {
+            const [formData, setFormData] = useState(editingEmployee || {
+                firstName: '',
+                lastName: '',
+                email: '',
+                phone: '',
+                role: '',
+                available: true
+            });
+
+            const handleSubmit = (e) => {
+                e.preventDefault();
+                onSave(formData);
+            };
+
+            return (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+                    <div className="bg-white rounded-lg max-w-md w-full">
+                        <div className="p-6">
+                            <div className="flex justify-between items-center mb-4">
+                                <h2 className="text-2xl font-bold">{editingEmployee ? 'Edit Employee' : 'Add Employee'}</h2>
+                                <button onClick={onClose} className="text-gray-500 hover:text-gray-700">
+                                    <i className="fas fa-times text-xl"></i>
+                                </button>
+                            </div>
+
+                            <form onSubmit={handleSubmit} className="space-y-4">
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">First Name *</label>
+                                        <input
+                                            type="text"
+                                            required
+                                            value={formData.firstName}
+                                            onChange={(e) => setFormData({...formData, firstName: e.target.value})}
+                                            className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">Last Name *</label>
+                                        <input
+                                            type="text"
+                                            required
+                                            value={formData.lastName}
+                                            onChange={(e) => setFormData({...formData, lastName: e.target.value})}
+                                            className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                                        />
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Email *</label>
+                                    <input
+                                        type="email"
+                                        required
+                                        value={formData.email}
+                                        onChange={(e) => setFormData({...formData, email: e.target.value})}
+                                        className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                                    />
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Phone</label>
+                                    <input
+                                        type="tel"
+                                        value={formData.phone}
+                                        onChange={(e) => setFormData({...formData, phone: e.target.value})}
+                                        className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                                    />
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Role *</label>
+                                    <select
+                                        required
+                                        value={formData.role}
+                                        onChange={(e) => setFormData({...formData, role: e.target.value})}
+                                        className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                                    >
+                                        <option value="">Select role...</option>
+                                        <option value="Foreman">Foreman</option>
+                                        <option value="Lead">Lead</option>
+                                        <option value="Journeyman">Journeyman</option>
+                                        <option value="Apprentice">Apprentice</option>
+                                        <option value="Laborer">Laborer</option>
+                                        <option value="Equipment Operator">Equipment Operator</option>
+                                    </select>
+                                </div>
+
+                                <div className="flex justify-end gap-3 pt-4">
+                                    <button
+                                        type="button"
+                                        onClick={onClose}
+                                        className="px-6 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button
+                                        type="submit"
+                                        className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                                    >
+                                        {editingEmployee ? 'Update' : 'Add'} Employee
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        // Crew Manager Component
+        function CrewManager({ crews, setCrews, employees }) {
+            const [showModal, setShowModal] = useState(false);
+            const [editingCrew, setEditingCrew] = useState(null);
+
+            const handleSave = (crewData) => {
+                if (editingCrew) {
+                    setCrews(crews.map(c => c.id === editingCrew.id ? {...crewData, id: editingCrew.id} : c));
+                } else {
+                    setCrews([...crews, {...crewData, id: Date.now().toString()}]);
+                }
+                setShowModal(false);
+                setEditingCrew(null);
+            };
+
+            const handleDelete = (id) => {
+                if (confirm('Delete this crew?')) {
+                    setCrews(crews.filter(c => c.id !== id));
+                }
+            };
+
+            return (
+                <div>
+                    <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+                        <div className="flex justify-between items-center">
+                            <div>
+                                <h2 className="text-2xl font-bold text-gray-800">Crew Management</h2>
+                                <p className="text-gray-600">{crews.length} active crews</p>
+                            </div>
+                            <button
+                                onClick={() => setShowModal(true)}
+                                className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700"
+                            >
+                                <i className="fas fa-plus mr-2"></i>Add Crew
+                            </button>
+                        </div>
+                    </div>
+
+                    <div className="grid md:grid-cols-2 gap-6">
+                        {crews.map(crew => {
+                            const crewMembers = crew.members.map(mid => employees.find(e => e.id === mid)).filter(Boolean);
+                            return (
+                                <div key={crew.id} className="bg-white rounded-lg shadow-md p-6 crew-card">
+                                    <div className="flex justify-between items-start mb-4">
+                                        <div>
+                                            <h3 className="text-xl font-bold text-gray-800">{crew.name}</h3>
+                                            <p className="text-sm text-gray-600">{crewMembers.length} members</p>
+                                        </div>
+                                        <div className="flex gap-2">
+                                            <button
+                                                onClick={() => { setEditingCrew(crew); setShowModal(true); }}
+                                                className="text-blue-600 hover:text-blue-800 p-1"
+                                            >
+                                                <i className="fas fa-edit"></i>
+                                            </button>
+                                            <button
+                                                onClick={() => handleDelete(crew.id)}
+                                                className="text-red-600 hover:text-red-800 p-1"
+                                            >
+                                                <i className="fas fa-trash"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    <div className="space-y-2">
+                                        {crewMembers.length > 0 ? (
+                                            crewMembers.map(member => (
+                                                <div key={member.id} className="flex items-center justify-between p-2 bg-gray-50 rounded">
+                                                    <div className="flex items-center">
+                                                        <i className="fas fa-user text-gray-400 mr-3"></i>
+                                                        <div>
+                                                            <p className="font-medium text-gray-800">{member.firstName} {member.lastName}</p>
+                                                            <p className="text-xs text-gray-500">{member.role}</p>
+                                                        </div>
+                                                    </div>
+                                                    <span className={`px-2 py-1 rounded-full text-xs font-semibold ${member.available ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                                                        {member.available ? 'Available' : 'Unavailable'}
+                                                    </span>
+                                                </div>
+                                            ))
+                                        ) : (
+                                            <p className="text-gray-400 italic text-center py-4">No members assigned</p>
+                                        )}
+                                    </div>
+
+                                    {crew.specialization && (
+                                        <div className="mt-4 pt-4 border-t">
+                                            <p className="text-sm text-gray-600">
+                                                <strong>Specialization:</strong> {crew.specialization}
+                                            </p>
+                                        </div>
+                                    )}
+                                </div>
+                            );
+                        })}
+                    </div>
+
+                    {showModal && (
+                        <CrewModal
+                            onClose={() => { setShowModal(false); setEditingCrew(null); }}
+                            onSave={handleSave}
+                            employees={employees}
+                            editingCrew={editingCrew}
+                        />
+                    )}
+                </div>
+            );
+        }
+
+        // Crew Modal
+        function CrewModal({ onClose, onSave, employees, editingCrew }) {
+            const [formData, setFormData] = useState(editingCrew || {
+                name: '',
+                members: [],
+                specialization: ''
+            });
+
+            const availableEmployees = employees.filter(e => e.available);
+
+            const handleSubmit = (e) => {
+                e.preventDefault();
+                onSave(formData);
+            };
+
+            const toggleMember = (empId) => {
+                if (formData.members.includes(empId)) {
+                    setFormData({...formData, members: formData.members.filter(id => id !== empId)});
+                } else {
+                    setFormData({...formData, members: [...formData.members, empId]});
+                }
+            };
+
+            return (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+                    <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+                        <div className="p-6">
+                            <div className="flex justify-between items-center mb-4">
+                                <h2 className="text-2xl font-bold">{editingCrew ? 'Edit Crew' : 'Add Crew'}</h2>
+                                <button onClick={onClose} className="text-gray-500 hover:text-gray-700">
+                                    <i className="fas fa-times text-xl"></i>
+                                </button>
+                            </div>
+
+                            <form onSubmit={handleSubmit} className="space-y-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Crew Name *</label>
+                                    <input
+                                        type="text"
+                                        required
+                                        value={formData.name}
+                                        onChange={(e) => setFormData({...formData, name: e.target.value})}
+                                        className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                                        placeholder="e.g., Foundation Crew, Framing Team A"
+                                    />
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Specialization</label>
+                                    <input
+                                        type="text"
+                                        value={formData.specialization}
+                                        onChange={(e) => setFormData({...formData, specialization: e.target.value})}
+                                        className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                                        placeholder="e.g., Concrete, Framing, Electrical"
+                                    />
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                                        Crew Members ({formData.members.length} selected)
+                                    </label>
+                                    <div className="border border-gray-300 rounded-lg p-3 max-h-64 overflow-y-auto">
+                                        {availableEmployees.length > 0 ? (
+                                            availableEmployees.map(emp => (
+                                                <label key={emp.id} className="flex items-center space-x-3 mb-2 cursor-pointer hover:bg-gray-50 p-2 rounded">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={formData.members.includes(emp.id)}
+                                                        onChange={() => toggleMember(emp.id)}
+                                                        className="rounded"
+                                                    />
+                                                    <div className="flex-1">
+                                                        <p className="font-medium">{emp.firstName} {emp.lastName}</p>
+                                                        <p className="text-sm text-gray-600">{emp.role}</p>
+                                                    </div>
+                                                </label>
+                                            ))
+                                        ) : (
+                                            <p className="text-gray-400 italic text-center py-4">No available employees</p>
+                                        )}
+                                    </div>
+                                </div>
+
+                                <div className="flex justify-end gap-3 pt-4">
+                                    <button
+                                        type="button"
+                                        onClick={onClose}
+                                        className="px-6 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button
+                                        type="submit"
+                                        className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                                    >
+                                        {editingCrew ? 'Update' : 'Add'} Crew
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        // Equipment Manager Component
+        function EquipmentManager({ equipment, setEquipment }) {
+            const [showModal, setShowModal] = useState(false);
+            const [editingEquipment, setEditingEquipment] = useState(null);
+
+            const handleSave = (eqData) => {
+                if (editingEquipment) {
+                    setEquipment(equipment.map(e => e.id === editingEquipment.id ? {...eqData, id: editingEquipment.id} : e));
+                } else {
+                    setEquipment([...equipment, {...eqData, id: Date.now().toString()}]);
+                }
+                setShowModal(false);
+                setEditingEquipment(null);
+            };
+
+            const handleDelete = (id) => {
+                if (confirm('Delete this equipment?')) {
+                    setEquipment(equipment.filter(e => e.id !== id));
+                }
+            };
+
+            const ownedEquipment = equipment.filter(e => e.type === 'owned');
+            const rentalEquipment = equipment.filter(e => e.type === 'rental');
+
+            return (
+                <div>
+                    <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+                        <div className="flex justify-between items-center">
+                            <div>
+                                <h2 className="text-2xl font-bold text-gray-800">Equipment Management</h2>
+                                <p className="text-gray-600">
+                                    {ownedEquipment.length} owned • {rentalEquipment.length} rental
+                                </p>
+                            </div>
+                            <button
+                                onClick={() => setShowModal(true)}
+                                className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700"
+                            >
+                                <i className="fas fa-plus mr-2"></i>Add Equipment
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* Owned Equipment */}
+                    <div className="mb-8">
+                        <h3 className="text-xl font-bold text-gray-800 mb-4">
+                            <i className="fas fa-truck text-green-600 mr-2"></i>Owned Equipment
+                        </h3>
+                        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+                            {ownedEquipment.map(eq => (
+                                <EquipmentCard
+                                    key={eq.id}
+                                    equipment={eq}
+                                    onEdit={() => { setEditingEquipment(eq); setShowModal(true); }}
+                                    onDelete={() => handleDelete(eq.id)}
+                                />
+                            ))}
+                        </div>
+                        {ownedEquipment.length === 0 && (
+                            <p className="text-gray-400 italic text-center py-8">No owned equipment</p>
+                        )}
+                    </div>
+
+                    {/* Rental Equipment */}
+                    <div>
+                        <h3 className="text-xl font-bold text-gray-800 mb-4">
+                            <i className="fas fa-handshake text-orange-600 mr-2"></i>Rental Equipment
+                        </h3>
+                        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+                            {rentalEquipment.map(eq => (
+                                <EquipmentCard
+                                    key={eq.id}
+                                    equipment={eq}
+                                    onEdit={() => { setEditingEquipment(eq); setShowModal(true); }}
+                                    onDelete={() => handleDelete(eq.id)}
+                                />
+                            ))}
+                        </div>
+                        {rentalEquipment.length === 0 && (
+                            <p className="text-gray-400 italic text-center py-8">No rental equipment</p>
+                        )}
+                    </div>
+
+                    {showModal && (
+                        <EquipmentModal
+                            onClose={() => { setShowModal(false); setEditingEquipment(null); }}
+                            onSave={handleSave}
+                            editingEquipment={editingEquipment}
+                        />
+                    )}
+                </div>
+            );
+        }
+
+        // Equipment Card
+        function EquipmentCard({ equipment, onEdit, onDelete }) {
+            return (
+                <div className="bg-white rounded-lg shadow-md p-4 crew-card">
+                    <div className="flex justify-between items-start mb-3">
+                        <div className="flex-1">
+                            <h4 className="font-bold text-lg text-gray-800">{equipment.name}</h4>
+                            <span className={`equipment-tag ${equipment.type === 'rental' ? 'bg-orange-100 text-orange-800' : 'bg-green-100 text-green-800'}`}>
+                                {equipment.type === 'rental' ? 'Rental' : 'Owned'}
+                            </span>
+                        </div>
+                        <div className="flex gap-1">
+                            <button onClick={onEdit} className="text-blue-600 hover:text-blue-800 p-1">
+                                <i className="fas fa-edit"></i>
+                            </button>
+                            <button onClick={onDelete} className="text-red-600 hover:text-red-800 p-1">
+                                <i className="fas fa-trash"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div className="space-y-1 text-sm text-gray-600">
+                        {equipment.identifier && (
+                            <p><strong>ID:</strong> {equipment.identifier}</p>
+                        )}
+                        {equipment.type === 'rental' && equipment.rentalCompany && (
+                            <p><strong>Company:</strong> {equipment.rentalCompany}</p>
+                        )}
+                        {equipment.notes && (
+                            <p className="mt-2 text-xs italic">{equipment.notes}</p>
+                        )}
+                    </div>
+                </div>
+            );
+        }
+
+        // Equipment Modal
+        function EquipmentModal({ onClose, onSave, editingEquipment }) {
+            const [formData, setFormData] = useState(editingEquipment || {
+                name: '',
+                type: 'owned',
+                identifier: '',
+                rentalCompany: '',
+                notes: ''
+            });
+
+            const handleSubmit = (e) => {
+                e.preventDefault();
+                onSave(formData);
+            };
+
+            return (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+                    <div className="bg-white rounded-lg max-w-md w-full">
+                        <div className="p-6">
+                            <div className="flex justify-between items-center mb-4">
+                                <h2 className="text-2xl font-bold">{editingEquipment ? 'Edit Equipment' : 'Add Equipment'}</h2>
+                                <button onClick={onClose} className="text-gray-500 hover:text-gray-700">
+                                    <i className="fas fa-times text-xl"></i>
+                                </button>
+                            </div>
+
+                            <form onSubmit={handleSubmit} className="space-y-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Equipment Name *</label>
+                                    <input
+                                        type="text"
+                                        required
+                                        value={formData.name}
+                                        onChange={(e) => setFormData({...formData, name: e.target.value})}
+                                        className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                                        placeholder="e.g., Excavator, Concrete Mixer"
+                                    />
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Type *</label>
+                                    <select
+                                        required
+                                        value={formData.type}
+                                        onChange={(e) => setFormData({...formData, type: e.target.value})}
+                                        className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                                    >
+                                        <option value="owned">Owned</option>
+                                        <option value="rental">Rental</option>
+                                    </select>
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Equipment ID / Serial</label>
+                                    <input
+                                        type="text"
+                                        value={formData.identifier}
+                                        onChange={(e) => setFormData({...formData, identifier: e.target.value})}
+                                        className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                                        placeholder="e.g., EXC-001"
+                                    />
+                                </div>
+
+                                {formData.type === 'rental' && (
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">Rental Company</label>
+                                        <input
+                                            type="text"
+                                            value={formData.rentalCompany}
+                                            onChange={(e) => setFormData({...formData, rentalCompany: e.target.value})}
+                                            className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                                            placeholder="e.g., United Rentals"
+                                        />
+                                    </div>
+                                )}
+
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Notes</label>
+                                    <textarea
+                                        value={formData.notes}
+                                        onChange={(e) => setFormData({...formData, notes: e.target.value})}
+                                        className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                                        rows="2"
+                                        placeholder="Maintenance notes, special instructions, etc."
+                                    ></textarea>
+                                </div>
+
+                                <div className="flex justify-end gap-3 pt-4">
+                                    <button
+                                        type="button"
+                                        onClick={onClose}
+                                        className="px-6 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button
+                                        type="submit"
+                                        className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                                    >
+                                        {editingEquipment ? 'Update' : 'Add'} Equipment
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        // Default Data Functions
+        function getDefaultEmployees() {
+            return [
+                { id: '1', firstName: 'John', lastName: 'Smith', email: 'john.smith@company.com', phone: '555-0101', role: 'Foreman', available: true },
+                { id: '2', firstName: 'Mike', lastName: 'Johnson', email: 'mike.j@company.com', phone: '555-0102', role: 'Lead', available: true },
+                { id: '3', firstName: 'Sarah', lastName: 'Williams', email: 'sarah.w@company.com', phone: '555-0103', role: 'Journeyman', available: true },
+                { id: '4', firstName: 'David', lastName: 'Brown', email: 'david.b@company.com', phone: '555-0104', role: 'Equipment Operator', available: true },
+                { id: '5', firstName: 'James', lastName: 'Davis', email: 'james.d@company.com', phone: '555-0105', role: 'Laborer', available: true }
+            ];
+        }
+
+        function getDefaultCrews() {
+            return [
+                { id: '1', name: 'Foundation Crew A', members: ['1', '2', '5'], specialization: 'Concrete & Foundation' },
+                { id: '2', name: 'Framing Team', members: ['3', '4'], specialization: 'Framing' }
+            ];
+        }
+
+        function getDefaultEquipment() {
+            return [
+                { id: '1', name: 'Excavator CAT 320', type: 'owned', identifier: 'EXC-001', notes: 'Regular maintenance due next month' },
+                { id: '2', name: 'Concrete Mixer', type: 'owned', identifier: 'MIX-001', notes: '' },
+                { id: '3', name: 'Backhoe Loader', type: 'rental', identifier: 'R-BL-2024', rentalCompany: 'United Rentals', notes: 'Weekly rental' },
+                { id: '4', name: 'Dump Truck', type: 'owned', identifier: 'DT-001', notes: '' }
+            ];
+        }
+
+        // Render the app
+        const root = ReactDOM.createRoot(document.getElementById('app'));
+        root.render(<DispatchApp />);
+    </script>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+</body>
+</html>
