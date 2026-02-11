@@ -6,6 +6,9 @@
     <title>Construction Dispatch Manager</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <style>
         .crew-card { transition: all 0.3s ease; }
         .crew-card:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
@@ -19,7 +22,7 @@
 <body class="bg-gray-50">
     <div id="app"></div>
 
-    <script type="module">
+    <script type="text/babel">
         import React, { useState, useEffect } from 'react';
         import ReactDOM from 'react-dom/client';
 
