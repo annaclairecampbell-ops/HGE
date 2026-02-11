@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>HGE Dispatch v9 - Live Tracking</title>
+    <title>HGE Dispatch v10</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -16,11 +16,9 @@
         .drop-zone { min-height: 140px; transition: all 0.2s; border-radius: 12px; border: 2px solid #e2e8f0; background-color: #f8fafc; }
         .drop-zone.drag-over { background-color: #fff7ed; border-color: #f97316; border-style: dashed; }
         
-        /* Badges */
         .crew-badge { background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%); color: white; }
         .equipment-badge { background: linear-gradient(135deg, #065f46 0%, #10b981 100%); color: white; }
         
-        /* THE RED HIGHLIGHT STYLE */
         .in-use-red { 
             background: #fecaca !important; 
             border: 2px solid #ef4444 !important; 
@@ -32,10 +30,9 @@
         .tab-active { border-bottom: 4px solid #1e40af; color: #1e40af; }
         .custom-scrollbar::-webkit-scrollbar { width: 6px; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
-        @media print { .no-print { display: none; } }
     </style>
 </head>
-<body class="bg-slate-100 text-slate-900">
+<body class="bg-slate-100">
     <div id="app"></div>
 
     <script type="text/babel">
@@ -47,35 +44,26 @@
             const [draggedItem, setDraggedItem] = useState(null);
 
             // DATA
-            const [employees] = useState(getDefaultEmployees());
-            const [equipment] = useState(getHGEEquipment());
-            const [jobsList] = useState(getHGEJobs());
+            const employees = getDefaultEmployees();
+            const equipment = getHGEEquipment();
+            const jobsList = getHGEJobs();
 
-            // STATE
-            const [assignments, setAssignments] = useState(() => JSON.parse(localStorage.getItem('hge_assign_v9')) || []);
-            const [activeRowJobs, setActiveRowJobs] = useState(() => JSON.parse(localStorage.getItem('hge_rows_v9')) || ['SELECT JOB', 'SELECT JOB', 'SELECT JOB']);
+            // PERSISTENT STATE
+            const [assignments, setAssignments] = useState(() => JSON.parse(localStorage.getItem('hge_assign_v10')) || []);
+            const [activeRowJobs, setActiveRowJobs] = useState(() => JSON.parse(localStorage.getItem('hge_rows_v10')) || ['SELECT JOB', 'SELECT JOB', 'SELECT JOB']);
 
             useEffect(() => {
-                localStorage.setItem('hge_assign_v9', JSON.stringify(assignments));
-                localStorage.setItem('hge_rows_v9', JSON.stringify(activeRowJobs));
+                localStorage.setItem('hge_assign_v10', JSON.stringify(assignments));
+                localStorage.setItem('hge_rows_v10', JSON.stringify(activeRowJobs));
             }, [assignments, activeRowJobs]);
 
-            // IMPROVED CHECK LOGIC
             const isItemAssigned = (name) => {
-                return assignments.some(a => 
-                    a.date === selectedDate && 
-                    a.name.trim().toLowerCase() === name.trim().toLowerCase()
-                );
+                return assignments.some(a => a.date === selectedDate && a.name.trim().toLowerCase() === name.trim().toLowerCase());
             };
 
             const handleDrop = (rowIndex) => {
                 if (!draggedItem) return;
-                
-                // Prevent duplicate assignment in the same drop
-                if(isItemAssigned(draggedItem.name)) {
-                    alert(`${draggedItem.name} is already assigned to a job today!`);
-                    return;
-                }
+                if(isItemAssigned(draggedItem.name)) return;
 
                 const newAssign = {
                     id: Date.now(),
@@ -90,22 +78,23 @@
                 setDraggedItem(null);
             };
 
-            const updateRowJob = (index, jobName) => {
-                const newRows = [...activeRowJobs];
-                newRows[index] = jobName;
-                setActiveRowJobs(newRows);
+            // FIXED: Explicitly mapping the index and value
+            const updateRowJob = (index, value) => {
+                const updatedRows = [...activeRowJobs];
+                updatedRows[index] = value;
+                setActiveRowJobs(updatedRows);
             };
 
             return (
                 <div className="min-h-screen flex flex-col font-sans">
                     <header className="bg-slate-900 text-white p-4 shadow-xl flex justify-between items-center no-print">
                         <div className="flex items-center gap-3">
-                            <i className="fas fa-traffic-light text-orange-500 text-2xl"></i>
-                            <h1 className="text-xl font-black tracking-tighter uppercase italic">HGE Live Dispatch v9</h1>
+                            <i className="fas fa-hard-hat text-yellow-400 text-2xl"></i>
+                            <h1 className="text-xl font-black tracking-tighter uppercase italic">HGE Dispatch v10</h1>
                         </div>
                         <div className="flex gap-2">
-                             <button onClick={() => setActiveRowJobs([...activeRowJobs, 'SELECT JOB'])} className="bg-orange-600 hover:bg-orange-500 px-3 py-1 rounded text-[10px] font-bold uppercase">+ Add Job Row</button>
-                             <button onClick={() => window.print()} className="bg-slate-700 hover:bg-slate-600 px-3 py-1 rounded text-[10px] font-bold uppercase">Print</button>
+                             <button onClick={() => setActiveRowJobs([...activeRowJobs, 'SELECT JOB'])} className="bg-orange-600 hover:bg-orange-500 px-3 py-1 rounded text-[10px] font-bold uppercase">+ Add Row</button>
+                             <button onClick={() => window.print()} className="bg-slate-700 hover:bg-slate-600 px-3 py-1 rounded text-[10px] font-bold uppercase">Print Board</button>
                         </div>
                     </header>
 
@@ -126,7 +115,7 @@
                                 <div className="w-full lg:w-1/4 no-print">
                                     <div className="bg-white p-5 rounded-2xl shadow-md border border-slate-200 sticky top-24 h-[80vh] flex flex-col">
                                         <div className="mb-4">
-                                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">Today's Date</label>
+                                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">Schedule Date</label>
                                             <input type="date" value={selectedDate} onChange={e => setSelectedDate(e.target.value)} 
                                                 className="font-bold text-slate-800 bg-slate-50 p-2 rounded-lg w-full text-center border" />
                                         </div>
@@ -160,7 +149,7 @@
                                                                 onDragStart={() => !inUse && setDraggedItem({...eq, category: 'equip'})}
                                                                 className={`${inUse ? 'in-use-red' : 'equipment-badge'} p-2 rounded-lg text-[11px] font-bold shadow-sm draggable flex justify-between items-center`}>
                                                                 <span>{eq.name}</span>
-                                                                {inUse && <i className="fas fa-check-circle text-[10px]"></i>}
+                                                                {inUse && <i className="fas fa-truck-pickup text-[10px]"></i>}
                                                             </div>
                                                         );
                                                     })}
@@ -170,7 +159,7 @@
                                     </div>
                                 </div>
 
-                                {/* Dynamic Job Rows */}
+                                {/* Dynamic Board */}
                                 <div className="w-full lg:w-3/4 space-y-4">
                                     {activeRowJobs.map((activeJob, idx) => (
                                         <div key={idx} 
@@ -182,29 +171,29 @@
                                                 <select 
                                                     value={activeJob} 
                                                     onChange={(e) => updateRowJob(idx, e.target.value)}
-                                                    className="bg-slate-800 text-orange-400 font-black text-xs uppercase p-1 rounded border-none focus:ring-0 cursor-pointer"
+                                                    className="bg-slate-800 text-yellow-400 font-black text-xs uppercase p-2 rounded border-none focus:ring-2 focus:ring-yellow-500 cursor-pointer w-full max-w-md"
                                                 >
-                                                    <option>CHOOSE JOB...</option>
+                                                    <option value="SELECT JOB">-- SELECT JOB FROM DIRECTORY --</option>
                                                     {jobsList.map(j => (
                                                         <option key={j.id} value={j.name}>{j.id} - {j.name}</option>
                                                     ))}
                                                 </select>
-                                                <button onClick={() => confirm('Remove row?') && setActiveRowJobs(activeRowJobs.filter((_, i) => i !== idx))} className="text-slate-500 hover:text-red-400 text-xs no-print">
-                                                    <i className="fas fa-trash"></i>
+                                                <button onClick={() => confirm('Remove row?') && setActiveRowJobs(activeRowJobs.filter((_, i) => i !== idx))} className="ml-4 text-slate-500 hover:text-red-400 text-xs no-print">
+                                                    <i className="fas fa-trash-alt"></i>
                                                 </button>
                                             </div>
 
                                             <div className="p-4 flex flex-wrap gap-2">
                                                 {assignments.filter(a => a.date === selectedDate && a.rowIndex === idx).map(a => (
-                                                    <div key={a.id} className={`${a.category === 'crew' ? 'crew-badge' : 'equipment-badge'} p-3 rounded-xl shadow min-w-[150px]`}>
+                                                    <div key={a.id} className={`${a.category === 'crew' ? 'crew-badge' : 'equipment-badge'} p-3 rounded-xl shadow min-w-[160px]`}>
                                                         <div className="flex justify-between items-center mb-1">
                                                             <p className="text-[11px] font-black">{a.name}</p>
                                                             <button onClick={() => setAssignments(assignments.filter(x => x.id !== a.id))} className="text-white opacity-50 hover:opacity-100"><i className="fas fa-times-circle"></i></button>
                                                         </div>
                                                         <input 
-                                                            type="text" placeholder="Note (e.g. Digging)" value={a.note}
+                                                            type="text" placeholder="Task..." value={a.note}
                                                             onChange={(e) => setAssignments(assignments.map(item => item.id === a.id ? {...item, note: e.target.value} : item))}
-                                                            className="w-full bg-black/20 rounded px-1 py-1 text-[9px] text-white border-none focus:ring-1 focus:ring-white/30"
+                                                            className="w-full bg-black/20 rounded px-1 py-1 text-[9px] text-white border-none"
                                                         />
                                                     </div>
                                                 ))}
@@ -215,20 +204,11 @@
                             </div>
                         ) : (
                             <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200">
-                                <h2 className="text-xl font-black mb-4 uppercase">System Records</h2>
-                                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-xs">
-                                    <div>
-                                        <h4 className="font-bold text-blue-600 mb-2 uppercase border-b">Team</h4>
-                                        {employees.map(e => <div key={e.id} className="py-1">{e.name} - {e.role}</div>)}
-                                    </div>
-                                    <div>
-                                        <h4 className="font-bold text-emerald-600 mb-2 uppercase border-b">Fleet</h4>
-                                        {equipment.map(eq => <div key={eq.id} className="py-1">{eq.name}</div>)}
-                                    </div>
-                                    <div>
-                                        <h4 className="font-bold text-orange-600 mb-2 uppercase border-b">Jobs</h4>
-                                        {jobsList.map(j => <div key={j.id} className="py-1">#{j.id} {j.name}</div>)}
-                                    </div>
+                                <h2 className="text-xl font-black mb-4 uppercase">Reference Data</h2>
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-[11px]">
+                                    <div><h4 className="font-bold text-blue-600 mb-2 uppercase border-b">Personnel</h4>{employees.map(e => <div key={e.id} className="py-1 border-b border-slate-50">{e.name} ({e.role})</div>)}</div>
+                                    <div><h4 className="font-bold text-emerald-600 mb-2 uppercase border-b">Fleet</h4>{equipment.map(eq => <div key={eq.id} className="py-1 border-b border-slate-50">{eq.name}</div>)}</div>
+                                    <div><h4 className="font-bold text-orange-600 mb-2 uppercase border-b">Jobs</h4>{jobsList.map(j => <div key={j.id} className="py-1 border-b border-slate-50">#{j.id} {j.name}</div>)}</div>
                                 </div>
                             </div>
                         )}
@@ -237,7 +217,6 @@
             );
         }
 
-        // FULL DATA LISTS
         function getHGEJobs() {
             return [
                 { id: "102", name: "Seth Nobman Sunny Slope" },
@@ -251,7 +230,9 @@
                 { id: "224", name: "Haggerty 3950 Part B" },
                 { id: "226", name: "Grading, Gabion, Grass" },
                 { id: "234", name: "45014 Newman" },
-                { id: "25-008", name: "Granitecreek Pathway" }
+                { id: "25-008", name: "Granitecreek Pathway" },
+                { id: "D-961", name: "Dutra Richmond" },
+                { id: "W-105", name: "Aaction Rents Windsor" }
             ];
         }
 
