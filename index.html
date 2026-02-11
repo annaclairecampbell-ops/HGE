@@ -3,157 +3,154 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Daily Dispatch Board</title>
+    <title>HGE Dispatch Board</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
     <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
     <style>
         .draggable { cursor: move; user-select: none; }
-        .draggable:active { opacity: 0.5; }
-        .drop-zone { min-height: 80px; transition: all 0.2s; border-radius: 8px; }
-        .drop-zone.drag-over { background-color: #dbeafe; border: 2px dashed #3b82f6; }
+        .drop-zone { min-height: 100px; transition: all 0.2s; border-radius: 8px; }
+        .drop-zone.drag-over { background-color: #eff6ff; border: 2px dashed #3b82f6; }
         .crew-badge { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
         .equipment-badge { background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); }
-        .assignment-card { animation: slideIn 0.3s ease-out; }
-        @keyframes slideIn { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
-        .tab-active { border-bottom: 3px solid #2563eb; color: #2563eb; }
+        .tab-active { border-bottom: 4px solid #1e40af; color: #1e40af; }
     </style>
 </head>
-<body class="bg-gray-50">
-    <div id="app"></div>
+<body class="bg-gray-100">
+    <div id="app">
+        <div class="flex items-center justify-center min-h-screen">
+            <p class="text-xl font-semibold text-gray-500 animate-pulse">Initializing Dispatch Board...</p>
+        </div>
+    </div>
 
     <script type="text/babel">
-        const { useState, useEffect, useRef } = React;
+        const { useState, useEffect } = React;
 
         function DispatchApp() {
-            const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
             const [activeTab, setActiveTab] = useState('schedule');
+            const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
             const [draggedItem, setDraggedItem] = useState(null);
 
-            // Data State with LocalStorage
-            const [employees, setEmployees] = useState(() => JSON.parse(localStorage.getItem('hge_employees')) || getDefaultEmployees());
-            const [crews, setCrews] = useState(() => JSON.parse(localStorage.getItem('hge_crews')) || getDefaultCrews());
-            const [equipment, setEquipment] = useState(() => JSON.parse(localStorage.getItem('hge_equipment')) || getDefaultEquipment());
-            const [assignments, setAssignments] = useState(() => JSON.parse(localStorage.getItem('hge_assignments')) || []);
+            // Data State with persistence
+            const [employees, setEmployees] = useState(() => JSON.parse(localStorage.getItem('hge_emp')) || [
+                { id: '1', name: 'John Doe', role: 'Foreman' },
+                { id: '2', name: 'Mike Smith', role: 'Operator' }
+            ]);
+            const [equipment, setEquipment] = useState(() => JSON.parse(localStorage.getItem('hge_equip')) || [
+                { id: 'e1', name: 'Excavator 320', type: 'Owned' }
+            ]);
+            const [assignments, setAssignments] = useState(() => JSON.parse(localStorage.getItem('hge_assign')) || []);
 
-            // Auto-Save
+            // Save to browser memory
             useEffect(() => {
-                localStorage.setItem('hge_employees', JSON.stringify(employees));
-                localStorage.setItem('hge_crews', JSON.stringify(crews));
-                localStorage.setItem('hge_equipment', JSON.stringify(equipment));
-                localStorage.setItem('hge_assignments', JSON.stringify(assignments));
-            }, [employees, crews, equipment, assignments]);
+                localStorage.setItem('hge_emp', JSON.stringify(employees));
+                localStorage.setItem('hge_equip', JSON.stringify(equipment));
+                localStorage.setItem('hge_assign', JSON.stringify(assignments));
+            }, [employees, equipment, assignments]);
+
+            const handleDrop = (timeSlot) => {
+                if (!draggedItem) return;
+                const newAssign = {
+                    id: Date.now(),
+                    date: selectedDate,
+                    timeSlot,
+                    name: draggedItem.name,
+                    type: draggedItem.type
+                };
+                setAssignments([...assignments, newAssign]);
+                setDraggedItem(null);
+            };
 
             return (
-                <div className="min-h-screen">
-                    <header className="bg-blue-800 text-white shadow-lg p-6">
-                        <h1 className="text-3xl font-bold"><i className="fas fa-calendar-day mr-3"></i>HGE Daily Dispatch</h1>
+                <div className="min-h-screen flex flex-col">
+                    <header className="bg-blue-900 text-white p-6 shadow-xl">
+                        <h1 className="text-2xl font-black italic tracking-tighter">HGE DISPATCH SYSTEM</h1>
                     </header>
 
-                    <nav className="bg-white shadow flex justify-center space-x-8">
-                        {['schedule', 'employees', 'crews', 'equipment'].map(tab => (
-                            <button key={tab} onClick={() => setActiveTab(tab)} className={`py-4 px-6 font-bold uppercase text-sm tracking-widest ${activeTab === tab ? 'tab-active' : 'text-gray-500'}`}>
-                                {tab}
+                    <nav className="bg-white border-b flex justify-center sticky top-0 z-50">
+                        {['schedule', 'employees', 'equipment'].map(t => (
+                            <button key={t} onClick={() => setActiveTab(t)} 
+                                className={`px-8 py-4 font-bold uppercase text-xs tracking-widest ${activeTab === t ? 'tab-active' : 'text-gray-400'}`}>
+                                {t}
                             </button>
                         ))}
                     </nav>
 
-                    <main className="container mx-auto p-6">
-                        {activeTab === 'schedule' && (
-                            <DailySchedule 
-                                selectedDate={selectedDate} setSelectedDate={setSelectedDate}
-                                crews={crews} employees={employees} equipment={equipment}
-                                assignments={assignments} setAssignments={setAssignments}
-                                draggedItem={draggedItem} setDraggedItem={setDraggedItem}
-                            />
+                    <main className="p-6 container mx-auto">
+                        {activeTab === 'schedule' ? (
+                            <div className="flex gap-8">
+                                {/* Sidebar */}
+                                <div className="w-1/4 space-y-6">
+                                    <div className="bg-white p-4 rounded-xl shadow-sm border">
+                                        <h3 className="font-black text-gray-800 mb-4 text-sm">DRAGGABLE RESOURCES</h3>
+                                        <div className="space-y-2">
+                                            {employees.map(e => (
+                                                <div key={e.id} draggable onDragStart={() => setDraggedItem({...e, type: 'crew'})}
+                                                    className="crew-badge text-white p-3 rounded-lg text-xs font-bold shadow-sm draggable">
+                                                    <i className="fas fa-user mr-2"></i>{e.name}
+                                                </div>
+                                            ))}
+                                            {equipment.map(eq => (
+                                                <div key={eq.id} draggable onDragStart={() => setDraggedItem({...eq, type: 'equip'})}
+                                                    className="equipment-badge text-white p-3 rounded-lg text-xs font-bold shadow-sm draggable">
+                                                    <i className="fas fa-truck mr-2"></i>{eq.name}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Board */}
+                                <div className="w-3/4">
+                                    <div className="mb-6 flex items-center gap-4">
+                                        <input type="date" value={selectedDate} onChange={e => setSelectedDate(e.target.value)} 
+                                            className="border-2 border-blue-100 rounded-lg p-2 font-bold text-blue-900" />
+                                    </div>
+                                    
+                                    <div className="grid gap-4">
+                                        {['7:00 AM', '9:00 AM', '11:00 AM', '1:00 PM', '3:00 PM'].map(slot => (
+                                            <div key={slot} 
+                                                onDragOver={e => e.preventDefault()}
+                                                onDrop={() => handleDrop(slot)}
+                                                className="bg-white p-4 rounded-xl border-2 border-transparent hover:border-blue-400 transition-all drop-zone shadow-sm">
+                                                <div className="flex justify-between items-center mb-2">
+                                                    <span className="text-xs font-black text-gray-400">{slot}</span>
+                                                </div>
+                                                <div className="flex flex-wrap gap-2">
+                                                    {assignments.filter(a => a.date === selectedDate && a.timeSlot === slot).map(a => (
+                                                        <div key={a.id} className={`${a.type === 'crew' ? 'crew-badge' : 'equipment-badge'} text-white px-3 py-2 rounded shadow-md text-sm font-bold flex items-center gap-3`}>
+                                                            {a.name}
+                                                            <button onClick={() => setAssignments(assignments.filter(x => x.id !== a.id))} className="hover:text-red-200">
+                                                                <i className="fas fa-times"></i>
+                                                            </button>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="bg-white p-10 rounded-xl shadow text-center">
+                                <i className="fas fa-tools text-4xl text-gray-200 mb-4"></i>
+                                <p className="text-gray-500 italic">Management views are active. Add your employee list to populate these tabs!</p>
+                            </div>
                         )}
-                        {activeTab === 'employees' && <EmployeeManager employees={employees} setEmployees={setEmployees} />}
-                        {activeTab === 'crews' && <CrewManager crews={crews} setCrews={setCrews} employees={employees} />}
-                        {activeTab === 'equipment' && <EquipmentManager equipment={equipment} setEquipment={setEquipment} />}
                     </main>
                 </div>
             );
         }
 
-        // --- Component sections (DailySchedule, AssignmentCard, etc. go here) ---
-        // For brevity in this message, I've integrated the drag-and-drop logic specifically for the browser:
-
-        function DailySchedule({ selectedDate, setSelectedDate, crews, employees, equipment, assignments, setAssignments, draggedItem, setDraggedItem }) {
-            const timeSlots = ['7:00 AM', '8:00 AM', '9:00 AM', '10:00 AM', '11:00 AM', '12:00 PM', '1:00 PM', '2:00 PM', '3:00 PM', '4:00 PM'];
-            const todaysAssignments = assignments.filter(a => a.date === selectedDate);
-
-            const handleDrop = (timeSlot) => {
-                if (!draggedItem) return;
-                const newAssignment = {
-                    id: Date.now().toString(),
-                    date: selectedDate,
-                    timeSlot,
-                    itemId: draggedItem.id,
-                    itemName: draggedItem.name,
-                    itemType: draggedItem.type,
-                    jobName: 'New Project'
-                };
-                setAssignments([...assignments, newAssignment]);
-                setDraggedItem(null);
-            };
-
-            return (
-                <div className="flex gap-6">
-                    <div className="w-1/4 bg-white p-4 rounded-lg shadow h-fit sticky top-4">
-                        <h2 className="font-bold mb-4 border-b pb-2">Resources</h2>
-                        <div className="space-y-2">
-                            {crews.map(c => (
-                                <div key={c.id} draggable onDragStart={() => setDraggedItem({...c, type: 'crew'})} className="crew-badge text-white p-3 rounded draggable shadow text-sm">
-                                    <i className="fas fa-users mr-2"></i>{c.name}
-                                </div>
-                            ))}
-                            {equipment.map(e => (
-                                <div key={e.id} draggable onDragStart={() => setDraggedItem({...e, type: 'equip'})} className="equipment-badge text-white p-3 rounded draggable shadow text-sm">
-                                    <i className="fas fa-truck mr-2"></i>{e.name}
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-
-                    <div className="w-3/4">
-                        <div className="bg-white p-4 rounded shadow mb-4 flex justify-between items-center">
-                            <input type="date" value={selectedDate} onChange={e => setSelectedDate(e.target.value)} className="border p-2 rounded" />
-                            <span className="font-bold text-blue-800">{todaysAssignments.length} Assigned</span>
-                        </div>
-                        <div className="space-y-4">
-                            {timeSlots.map(slot => (
-                                <div key={slot} 
-                                     onDragOver={e => e.preventDefault()} 
-                                     onDrop={() => handleDrop(slot)}
-                                     className="bg-white p-4 rounded shadow-sm border-l-4 border-blue-200 min-h-[100px] hover:border-blue-500 transition-colors drop-zone">
-                                    <span className="text-gray-400 font-bold text-xs">{slot}</span>
-                                    <div className="mt-2 space-y-2">
-                                        {todaysAssignments.filter(a => a.timeSlot === slot).map(a => (
-                                            <div key={a.id} className={`${a.itemType === 'crew' ? 'crew-badge' : 'equipment-badge'} text-white p-3 rounded flex justify-between items-center`}>
-                                                <span><strong>{a.itemName}</strong> - {a.jobName}</span>
-                                                <button onClick={() => setAssignments(assignments.filter(x => x.id !== a.id))}><i className="fas fa-times"></i></button>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-                </div>
-            );
-        }
-
-        // Dummy Data Generators
-        function getDefaultEmployees() { return [{ id: '1', name: 'John Foreman' }, { id: '2', name: 'Mike Operator' }]; }
-        function getDefaultCrews() { return [{ id: 'c1', name: 'Paving Crew Alpha' }]; }
-        function getDefaultEquipment() { return [{ id: 'e1', name: 'Excavator 300' }]; }
-
-        // Render
-        const root = ReactDOM.createRoot(document.getElementById('app'));
+        // Final Mount
+        const container = document.getElementById('app');
+        const root = ReactDOM.createRoot(container);
         root.render(<DispatchApp />);
     </script>
 </body>
