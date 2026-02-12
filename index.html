@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>HGE Dispatch v11.21 - Full Suite + Calendar</title>
+    <title>HGE Dispatch v11.22 - Stable Calendar Suite</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
@@ -31,35 +31,47 @@
 
         function DispatchApp() {
             const [activeTab, setActiveTab] = useState('schedule');
+            const [calendarView, setCalendarView] = useState('month'); 
             const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
             const [searchTerm, setSearchTerm] = useState('');
             const [subSearch, setSubSearch] = useState('');
             const [draggedItem, setDraggedItem] = useState(null);
 
-            // Persistent Data States
-            const [assignments, setAssignments] = useState(() => JSON.parse(localStorage.getItem('hge_asgn_v1121')) || []);
-            const [jobs, setJobs] = useState(() => JSON.parse(localStorage.getItem('hge_jobs_v1121')) || [{id: 1, jobName: 'SELECT JOB', scope: '', start: '07:00', stop: '15:30'}]);
-            const [rentals, setRentals] = useState(() => JSON.parse(localStorage.getItem('hge_rent_v1121')) || []);
-            const [subHaulers, setSubHaulers] = useState(() => JSON.parse(localStorage.getItem('hge_sub_v1121')) || []);
-            const [truckingLogs, setTruckingLogs] = useState(() => JSON.parse(localStorage.getItem('hge_logs_v1121')) || {
-                'Tino Rivera': { hauls: [{id: 101, priority: 'Medium', jobName: 'SELECT JOB', equip: '', load: '', unload: '', notes: ''}] },
-                'Benny Shepher': { hauls: [{id: 102, priority: 'Medium', jobName: 'SELECT JOB', equip: '', load: '', unload: '', notes: ''}] }
+            // Storage Keys
+            const STORE_KEY = 'hge_v1122_data';
+            const [data, setData] = useState(() => {
+                const saved = localStorage.getItem(STORE_KEY);
+                return saved ? JSON.parse(saved) : {
+                    assignments: [],
+                    jobsByDate: {}, // Map: { "2026-02-12": [{jobName...}] }
+                    rentals: [],
+                    subHaulers: [],
+                    truckingLogs: { 'Tino Rivera': { hauls: [] }, 'Benny Shepher': { hauls: [] } }
+                };
             });
 
             useEffect(() => {
-                const data = { hge_asgn_v1121: assignments, hge_jobs_v1121: jobs, hge_rent_v1121: rentals, hge_sub_v1121: subHaulers, hge_logs_v1121: truckingLogs };
-                Object.entries(data).forEach(([k, v]) => localStorage.setItem(k, JSON.stringify(v)));
-            }, [assignments, jobs, rentals, subHaulers, truckingLogs]);
+                localStorage.setItem(STORE_KEY, JSON.stringify(data));
+            }, [data]);
+
+            // Helper to get jobs for current date
+            const currentJobs = data.jobsByDate[selectedDate] || [{id: 1, jobName: 'SELECT JOB', scope: ''}];
+
+            const updateJobs = (newJobs) => {
+                setData(prev => ({
+                    ...prev,
+                    jobsByDate: { ...prev.jobsByDate, [selectedDate]: newJobs }
+                }));
+            };
 
             const handleDrop = (section, index, colType) => {
                 if (!draggedItem) return;
-                setAssignments([...assignments, { ...draggedItem, id: Date.now(), date: selectedDate, section, index, colType }]);
+                const newAsgn = { ...draggedItem, id: Date.now(), date: selectedDate, section, index, colType };
+                setData(prev => ({ ...prev, assignments: [...prev.assignments, newAsgn] }));
                 setDraggedItem(null);
             };
 
-            const isAssigned = (name) => assignments.some(a => a.date === selectedDate && a.name === name);
-
-            // Calendar Helpers
+            // Calendar Math
             const calendarDays = useMemo(() => {
                 const date = new Date(selectedDate);
                 const year = date.getFullYear();
@@ -68,40 +80,40 @@
                 const daysInMonth = new Date(year, month + 1, 0).getDate();
                 const days = [];
                 for (let i = 0; i < firstDay; i++) days.push(null);
-                for (let d = 1; d <= daysInMonth; d++) days.push({ day: d, dateStr: `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}` });
+                for (let d = 1; d <= daysInMonth; d++) {
+                    days.push(`${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`);
+                }
                 return days;
             }, [selectedDate]);
 
             return (
                 <div className="min-h-screen pb-20">
-                    <header className="bg-slate-900 text-white p-4 flex justify-between items-center no-print sticky top-0 z-50 shadow-lg">
+                    <header className="bg-slate-900 text-white p-4 flex justify-between items-center no-print sticky top-0 z-50">
                         <div className="flex items-center gap-3">
                             <i className="fas fa-truck-monster text-orange-500 text-2xl"></i>
                             <h1 className="text-xl font-black uppercase italic tracking-tighter">HGE Operations</h1>
                         </div>
-                        <nav className="flex items-center gap-6 text-[10px] font-black uppercase">
-                            <button onClick={() => setActiveTab('schedule')} className={activeTab === 'schedule' ? 'text-orange-500' : 'text-slate-400'}>Dispatch Board</button>
-                            <button onClick={() => setActiveTab('calendar')} className={activeTab === 'calendar' ? 'text-orange-500' : 'text-slate-400'}>Calendar</button>
-                            <button onClick={() => setActiveTab('rentals')} className={activeTab === 'rentals' ? 'text-orange-500' : 'text-slate-400'}>Rentals</button>
-                            <button onClick={() => window.print()} className="bg-slate-700 px-3 py-1.5 rounded">Print</button>
+                        <nav className="flex items-center gap-4 text-[10px] font-black uppercase">
+                            <button onClick={() => setActiveTab('schedule')} className={`px-3 py-1 rounded ${activeTab === 'schedule' ? 'bg-orange-600 text-white' : 'text-slate-400'}`}>Board</button>
+                            <button onClick={() => setActiveTab('calendar')} className={`px-3 py-1 rounded ${activeTab === 'calendar' ? 'bg-orange-600 text-white' : 'text-slate-400'}`}>Calendar</button>
+                            <button onClick={() => setActiveTab('rentals')} className={`px-3 py-1 rounded ${activeTab === 'rentals' ? 'bg-orange-600 text-white' : 'text-slate-400'}`}>Rentals</button>
                         </nav>
                     </header>
 
                     <div className="flex flex-col lg:flex-row p-4 gap-6">
-                        {/* Sidebar: Only visible on Schedule Tab */}
                         {activeTab === 'schedule' && (
                             <aside className="w-full lg:w-80 no-print">
                                 <div className="bg-white p-4 rounded-xl shadow border sticky top-20">
-                                    <input type="text" placeholder="FILTER ROSTER..." className="w-full p-2 bg-slate-50 border rounded text-[10px] font-bold mb-4 uppercase" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
+                                    <input type="text" placeholder="FILTER..." className="w-full p-2 bg-slate-50 border rounded text-[10px] font-bold mb-4 uppercase" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
                                     <input type="date" value={selectedDate} onChange={e => setSelectedDate(e.target.value)} className="w-full p-2 border rounded font-bold text-xs mb-4" />
-                                    <div className="h-[65vh] overflow-y-auto pr-2 custom-scrollbar">
+                                    <div className="h-[60vh] overflow-y-auto pr-2 custom-scrollbar">
                                         <h3 className="text-[10px] font-black text-slate-400 border-b mb-2 uppercase italic">Personnel</h3>
                                         {getFullRoster().filter(e => e.name.toLowerCase().includes(searchTerm.toLowerCase())).map(e => (
-                                            <div key={e.id} draggable onDragStart={() => setDraggedItem({...e, type: 'person'})} className={`p-2 mb-1 rounded text-[10px] font-bold bg-${e.subType} ${isAssigned(e.name)?'in-use':''}`}>{e.name}</div>
+                                            <div key={e.id} draggable onDragStart={() => setDraggedItem({...e, type: 'person'})} className={`p-2 mb-1 rounded text-[10px] font-bold bg-${e.subType} ${data.assignments.some(a => a.date === selectedDate && a.name === e.name)?'in-use':''}`}>{e.name}</div>
                                         ))}
                                         <h3 className="text-[10px] font-black text-slate-400 border-b mt-6 mb-2 uppercase italic">Fleet</h3>
-                                        {getFullEquipment().concat(rentals.filter(r => r.status === 'Active')).filter(eq => eq.name.toLowerCase().includes(searchTerm.toLowerCase())).map((eq, i) => (
-                                            <div key={i} draggable onDragStart={() => setDraggedItem({...eq, type: 'heavy'})} className={`p-2 mb-1 rounded text-[10px] font-bold bg-heavy text-white ${isAssigned(eq.name)?'in-use':''}`}>{eq.name}</div>
+                                        {getFullEquipment().map((eq, i) => (
+                                            <div key={i} draggable onDragStart={() => setDraggedItem({...eq, type: 'heavy'})} className={`p-2 mb-1 rounded text-[10px] font-bold bg-heavy text-white ${data.assignments.some(a => a.date === selectedDate && a.name === eq.name)?'in-use':''}`}>{eq.name}</div>
                                         ))}
                                     </div>
                                 </div>
@@ -110,37 +122,34 @@
 
                         <div className="flex-1">
                             {activeTab === 'schedule' ? (
-                                <div className="space-y-10">
-                                    {/* Site Jobs */}
+                                <div className="space-y-8">
                                     <section>
-                                        <h2 className="text-sm font-black uppercase italic text-slate-700 mb-4 border-b-2 pb-2">Production Sites</h2>
-                                        {jobs.map((job, idx) => (
+                                        <h2 className="text-sm font-black uppercase italic text-slate-700 mb-4 border-b-2 pb-2">Production Sites - {selectedDate}</h2>
+                                        {currentJobs.map((job, idx) => (
                                             <div key={job.id} className="bg-white rounded-lg shadow border-l-4 border-blue-600 mb-6 overflow-hidden">
-                                                <div className="bg-slate-900 p-2 flex gap-3 text-white">
-                                                    <select className="bg-slate-800 text-yellow-400 font-bold text-[10px] p-1 rounded uppercase w-48" value={job.jobName} onChange={e => {let n=[...jobs]; n[idx].jobName=e.target.value; setJobs(n)}}>
+                                                <div className="bg-slate-900 p-2 flex gap-3">
+                                                    <select className="bg-slate-800 text-yellow-400 font-bold text-[10px] p-1 rounded uppercase w-48" value={job.jobName} onChange={e => {let n=[...currentJobs]; n[idx].jobName=e.target.value; updateJobs(n)}}>
                                                         <option>SELECT JOB</option>
-                                                        {getHGEJobs().map(j => <option key={j.id} value={j.name}>{j.id} - {j.name}</option>)}
+                                                        {getHGEJobs().map(j => <option key={j.id} value={j.name}>{j.name}</option>)}
                                                     </select>
-                                                    <input className="bg-slate-800 text-slate-300 text-[10px] p-1 flex-1 rounded uppercase" value={job.scope} onChange={e => {let n=[...jobs]; n[idx].scope=e.target.value; setJobs(n)}} placeholder="SCOPE..." />
-                                                    <button onClick={() => setJobs(jobs.filter(j => j.id !== job.id))} className="text-slate-600 px-2"><i className="fas fa-trash"></i></button>
+                                                    <input className="bg-slate-800 text-slate-300 text-[10px] p-1 flex-1 rounded uppercase" value={job.scope} onChange={e => {let n=[...currentJobs]; n[idx].scope=e.target.value; updateJobs(n)}} placeholder="SCOPE..." />
+                                                    <button onClick={() => updateJobs(currentJobs.filter(j => j.id !== job.id))} className="text-slate-600 px-2"><i className="fas fa-trash"></i></button>
                                                 </div>
                                                 <div className="p-3 grid grid-cols-2 gap-4">
-                                                    <div onDragOver={e => e.preventDefault()} onDrop={() => handleDrop('site', idx, 'person')} className="border-r pr-4 min-h-[60px]">
-                                                        <span className="text-[9px] font-black text-slate-400 uppercase block mb-2 italic">Personnel</span>
+                                                    <div onDragOver={e => e.preventDefault()} onDrop={() => handleDrop('site', idx, 'person')} className="border-r pr-4 min-h-[50px]">
                                                         <div className="flex flex-wrap gap-2">
-                                                            {assignments.filter(a => a.date === selectedDate && a.section === 'site' && a.index === idx && a.type === 'person').map(a => (
-                                                                <div key={a.id} className={`p-1 px-2 rounded flex items-center gap-2 bg-${a.subType} text-[10px] font-bold`}>
-                                                                    {a.name} <i onClick={() => setAssignments(assignments.filter(x => x.id !== a.id))} className="fas fa-times cursor-pointer opacity-50"></i>
+                                                            {data.assignments.filter(a => a.date === selectedDate && a.section === 'site' && a.index === idx && a.type === 'person').map(a => (
+                                                                <div key={a.id} className={`p-1 px-2 rounded flex items-center gap-2 bg-${a.subType} text-[10px] font-bold shadow-sm`}>
+                                                                    {a.name} <i onClick={() => setData(prev => ({...prev, assignments: prev.assignments.filter(x => x.id !== a.id)}))} className="fas fa-times cursor-pointer opacity-50"></i>
                                                                 </div>
                                                             ))}
                                                         </div>
                                                     </div>
-                                                    <div onDragOver={e => e.preventDefault()} onDrop={() => handleDrop('site', idx, 'heavy')} className="min-h-[60px]">
-                                                        <span className="text-[9px] font-black text-slate-400 uppercase block mb-2 italic">Equipment</span>
+                                                    <div onDragOver={e => e.preventDefault()} onDrop={() => handleDrop('site', idx, 'heavy')} className="min-h-[50px]">
                                                         <div className="flex flex-wrap gap-2">
-                                                            {assignments.filter(a => a.date === selectedDate && a.section === 'site' && a.index === idx && a.type === 'heavy').map(a => (
-                                                                <div key={a.id} className="p-1 px-2 rounded flex items-center gap-2 bg-heavy text-white text-[10px] font-bold italic">
-                                                                    {a.name} <i onClick={() => setAssignments(assignments.filter(x => x.id !== a.id))} className="fas fa-times cursor-pointer opacity-50"></i>
+                                                            {data.assignments.filter(a => a.date === selectedDate && a.section === 'site' && a.index === idx && a.type === 'heavy').map(a => (
+                                                                <div key={a.id} className="p-1 px-2 rounded flex items-center gap-2 bg-heavy text-white text-[10px] font-bold italic shadow-sm">
+                                                                    {a.name} <i onClick={() => setData(prev => ({...prev, assignments: prev.assignments.filter(x => x.id !== a.id)}))} className="fas fa-times cursor-pointer opacity-50"></i>
                                                                 </div>
                                                             ))}
                                                         </div>
@@ -148,30 +157,27 @@
                                                 </div>
                                             </div>
                                         ))}
-                                        <button onClick={() => setJobs([...jobs, {id: Date.now(), jobName: 'SELECT JOB', scope: '', start: '07:00', stop: '15:30'}])} className="w-full py-2 border-2 border-dashed border-slate-300 text-slate-400 text-[10px] font-black uppercase rounded-lg">+ Add Site Block</button>
+                                        <button onClick={() => updateJobs([...currentJobs, {id: Date.now(), jobName: 'SELECT JOB', scope: ''}])} className="w-full py-2 border-2 border-dashed text-slate-400 text-[10px] font-bold uppercase rounded-lg">+ Add Job Block</button>
                                     </section>
 
-                                    {/* Company Trucking */}
                                     <section>
                                         <h2 className="text-sm font-black uppercase italic text-slate-700 mb-4 border-b-2 pb-2">Company Trucking</h2>
-                                        {Object.keys(truckingLogs).map(driver => (
-                                            <div key={driver} className="bg-white rounded shadow border-t-4 border-purple-600 mb-6">
-                                                <div className="bg-slate-900 p-2 flex justify-between items-center">
-                                                    <span className="text-purple-400 font-black text-[11px] uppercase ml-2">{driver}</span>
-                                                    <button onClick={() => { let n={...truckingLogs}; n[driver].hauls.push({id: Date.now(), priority: 'Medium', jobName: 'SELECT JOB', equip: '', load: '', unload: '', notes: ''}); setTruckingLogs(n); }} className="bg-purple-600 text-white px-3 py-1 rounded text-[9px] font-black">+ ADD HAUL</button>
+                                        {Object.keys(data.truckingLogs).map(driver => (
+                                            <div key={driver} className="bg-white rounded shadow border-t-4 border-purple-600 mb-6 overflow-hidden">
+                                                <div className="bg-slate-900 p-2 text-purple-400 font-black text-[11px] uppercase flex justify-between">
+                                                    <span>{driver}</span>
+                                                    <button onClick={() => { let n={...data.truckingLogs}; n[driver].hauls.push({id: Date.now(), priority: 'Med', jobName: 'SELECT JOB', equip: '', load: '', unload: ''}); setData(prev => ({...prev, truckingLogs: n})); }} className="bg-purple-600 text-white px-3 rounded text-[9px]">+ ADD</button>
                                                 </div>
                                                 <table className="w-full text-[10px]">
                                                     <tbody className="divide-y">
-                                                        {truckingLogs[driver].hauls.map((h, i) => (
+                                                        {data.truckingLogs[driver].hauls.map((h, i) => (
                                                             <tr key={h.id}>
-                                                                <td className="p-1 w-24"><select className="w-full border rounded p-1 font-bold uppercase" value={h.priority} onChange={e => { let n={...truckingLogs}; n[driver].hauls[i].priority=e.target.value; setTruckingLogs(n); }}><option>Low</option><option>Medium</option><option>High</option></select></td>
-                                                                <td className="p-1 w-48"><select className="w-full border rounded p-1 font-bold" value={h.jobName} onChange={e => { let n={...truckingLogs}; n[driver].hauls[i].jobName=e.target.value; setTruckingLogs(n); }}><option>SELECT JOB</option>{getHGEJobs().map(j => <option key={j.id} value={j.name}>{j.name}</option>)}</select></td>
-                                                                <td className="p-1"><input className="w-full border rounded p-1 uppercase" placeholder="ITEM" value={h.equip} onChange={e => { let n={...truckingLogs}; n[driver].hauls[i].equip=e.target.value; setTruckingLogs(n); }} /></td>
-                                                                <td className="p-1"><input className="w-full border rounded p-1 uppercase" placeholder="LOAD" value={h.load} onChange={e => { let n={...truckingLogs}; n[driver].hauls[i].load=e.target.value; setTruckingLogs(n); }} /></td>
-                                                                <td className="p-1"><input className="w-full border rounded p-1 uppercase" placeholder="UNLOAD" value={h.unload} onChange={e => { let n={...truckingLogs}; n[driver].hauls[i].unload=e.target.value; setTruckingLogs(n); }} /></td>
-                                                                <td className="p-1 no-print flex gap-2">
-                                                                    <button onClick={() => { let n={...truckingLogs}; n[driver].hauls.push({...h, id: Date.now()}); setTruckingLogs(n); }} className="text-blue-400"><i className="fas fa-copy"></i></button>
-                                                                    <button onClick={() => { let n={...truckingLogs}; n[driver].hauls=n[driver].hauls.filter(x=>x.id!==h.id); setTruckingLogs(n); }} className="text-red-300"><i className="fas fa-trash"></i></button>
+                                                                <td className="p-1 w-48"><select className="w-full border rounded p-1" value={h.jobName} onChange={e => { let n={...data.truckingLogs}; n[driver].hauls[i].jobName=e.target.value; setData(prev => ({...prev, truckingLogs: n})); }}><option>SELECT JOB</option>{getHGEJobs().map(j => <option key={j.id} value={j.name}>{j.name}</option>)}</select></td>
+                                                                <td className="p-1"><input className="w-full border rounded p-1 uppercase" placeholder="ITEM" value={h.equip} onChange={e => { let n={...data.truckingLogs}; n[driver].hauls[i].equip=e.target.value; setData(prev => ({...prev, truckingLogs: n})); }} /></td>
+                                                                <td className="p-1"><input className="w-full border rounded p-1 uppercase" placeholder="LOAD" value={h.load} onChange={e => { let n={...data.truckingLogs}; n[driver].hauls[i].load=e.target.value; setData(prev => ({...prev, truckingLogs: n})); }} /></td>
+                                                                <td className="p-1"><input className="w-full border rounded p-1 uppercase" placeholder="UNLOAD" value={h.unload} onChange={e => { let n={...data.truckingLogs}; n[driver].hauls[i].unload=e.target.value; setData(prev => ({...prev, truckingLogs: n})); }} /></td>
+                                                                <td className="p-1 w-12 text-center no-print">
+                                                                    <button onClick={() => { let n={...data.truckingLogs}; n[driver].hauls=n[driver].hauls.filter(x=>x.id!==h.id); setData(prev => ({...prev, truckingLogs: n})); }} className="text-red-300"><i className="fas fa-trash"></i></button>
                                                                 </td>
                                                             </tr>
                                                         ))}
@@ -180,83 +186,61 @@
                                             </div>
                                         ))}
                                     </section>
-
-                                    {/* Sub Hauling */}
-                                    <section>
-                                        <div className="flex justify-between items-center mb-4 border-b-2 pb-2">
-                                            <h2 className="text-sm font-black uppercase italic text-red-800">Sub Hauling</h2>
-                                            <input type="text" placeholder="FILTER BROKERS..." className="border rounded px-2 py-1 text-[9px] w-48 no-print" value={subSearch} onChange={e => setSubSearch(e.target.value)} />
-                                        </div>
-                                        <div className="bg-white rounded shadow overflow-hidden">
-                                            <table className="w-full text-[10px]">
-                                                <thead className="bg-slate-900 text-white uppercase font-black">
-                                                    <tr><th className="p-2 text-left">Broker</th><th className="p-2 w-12 text-center">Qty</th><th className="p-2">Type</th><th className="p-2">Job Name</th><th className="p-2">Load</th><th className="p-2">Unload</th><th className="no-print"></th></tr>
-                                                </thead>
-                                                <tbody className="divide-y">
-                                                    {subHaulers.filter(s => s.broker.toLowerCase().includes(subSearch.toLowerCase())).map((sub, sIdx) => (
-                                                        <tr key={sub.id}>
-                                                            <td className="p-1"><input className="w-full border rounded p-1 font-bold text-red-700 uppercase" value={sub.broker} onChange={e => { let n=[...subHaulers]; n[sIdx].broker=e.target.value; setSubHaulers(n)}} /></td>
-                                                            <td className="p-1"><input className="w-full border rounded p-1 text-center font-bold" value={sub.qty} onChange={e => { let n=[...subHaulers]; n[sIdx].qty=e.target.value; setSubHaulers(n)}} /></td>
-                                                            <td className="p-1"><input className="w-full border rounded p-1 uppercase" value={sub.type} onChange={e => { let n=[...subHaulers]; n[sIdx].type=e.target.value; setSubHaulers(n)}} /></td>
-                                                            <td className="p-1"><select className="w-full border rounded p-1 uppercase font-bold" value={sub.job} onChange={e => { let n=[...subHaulers]; n[sIdx].job=e.target.value; setSubHaulers(n)}}><option>SELECT JOB</option>{getHGEJobs().map(j => <option key={j.id} value={j.name}>{j.name}</option>)}</select></td>
-                                                            <td className="p-1"><input className="w-full border rounded p-1 uppercase" value={sub.load} onChange={e => { let n=[...subHaulers]; n[sIdx].load=e.target.value; setSubHaulers(n)}} /></td>
-                                                            <td className="p-1"><input className="w-full border rounded p-1 uppercase" value={sub.unload} onChange={e => { let n=[...subHaulers]; n[sIdx].unload=e.target.value; setSubHaulers(n)}} /></td>
-                                                            <td className="p-1 text-center no-print"><button onClick={() => setSubHaulers(subHaulers.filter(x => x.id !== sub.id))} className="text-red-300"><i className="fas fa-trash"></i></button></td>
-                                                        </tr>
-                                                    ))}
-                                                </tbody>
-                                            </table>
-                                            <button onClick={() => setSubHaulers([...subHaulers, {id: Date.now(), broker: '', qty: '1', type: 'S10', job: '', load: '', unload: ''}])} className="p-2 text-[10px] font-black text-blue-600 uppercase no-print">+ Add Broker Truck</button>
-                                        </div>
-                                    </section>
                                 </div>
                             ) : activeTab === 'calendar' ? (
-                                <div className="bg-white rounded shadow border overflow-hidden">
-                                    <div className="bg-slate-900 p-4 flex justify-between items-center">
-                                        <h2 className="text-white font-black uppercase italic">{new Date(selectedDate).toLocaleString('default', { month: 'long', year: 'numeric' })}</h2>
+                                <div className="bg-white rounded-xl shadow border overflow-hidden">
+                                    <div className="bg-slate-900 p-4 flex flex-col md:flex-row justify-between items-center gap-4 border-b">
+                                        <div className="flex items-center gap-4 text-white">
+                                            <h2 className="font-black uppercase italic">{new Date(selectedDate).toLocaleString('default', { month: 'long', year: 'numeric' })}</h2>
+                                            <div className="flex bg-slate-800 rounded p-1 no-print">
+                                                {['month', 'week', 'day'].map(v => (
+                                                    <button key={v} onClick={() => setCalendarView(v)} className={`px-4 py-1 rounded text-[10px] font-black uppercase ${calendarView === v ? 'bg-orange-600' : 'text-slate-400'}`}>{v}</button>
+                                                ))}
+                                            </div>
+                                        </div>
                                         <div className="flex gap-2">
-                                            <button onClick={() => {let d=new Date(selectedDate); d.setMonth(d.getMonth()-1); setSelectedDate(d.toISOString().split('T')[0]);}} className="bg-slate-700 text-white p-2 rounded"><i className="fas fa-chevron-left"></i></button>
-                                            <button onClick={() => {let d=new Date(selectedDate); d.setMonth(d.getMonth()+1); setSelectedDate(d.toISOString().split('T')[0]);}} className="bg-slate-700 text-white p-2 rounded"><i className="fas fa-chevron-right"></i></button>
+                                            <button onClick={() => {let d=new Date(selectedDate); d.setMonth(d.getMonth()-1); setSelectedDate(d.toISOString().split('T')[0]);}} className="bg-slate-700 text-white p-2 rounded px-3"><i className="fas fa-chevron-left"></i></button>
+                                            <button onClick={() => setSelectedDate(new Date().toISOString().split('T')[0])} className="bg-slate-700 text-white px-4 py-1 rounded font-bold text-[10px]">TODAY</button>
+                                            <button onClick={() => {let d=new Date(selectedDate); d.setMonth(d.getMonth()+1); setSelectedDate(d.toISOString().split('T')[0]);}} className="bg-slate-700 text-white p-2 rounded px-3"><i className="fas fa-chevron-right"></i></button>
                                         </div>
                                     </div>
-                                    <div className="grid grid-cols-7 border-t border-l">
-                                        {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(d => (
-                                            <div key={d} className="bg-slate-100 p-2 text-center text-[10px] font-black uppercase border-b border-r">{d}</div>
-                                        ))}
-                                        {calendarDays.map((day, i) => (
-                                            <div key={i} className={`min-h-[120px] p-1 border-b border-r ${!day ? 'bg-slate-50' : ''}`}>
-                                                {day && (
-                                                    <>
-                                                        <div className="text-[10px] font-black text-slate-400 mb-1">{day.day}</div>
-                                                        <div className="space-y-1">
-                                                            {/* Pulling Job Names that are active for the month */}
-                                                            {day.dateStr === selectedDate && jobs.filter(j => j.jobName !== 'SELECT JOB').map(j => (
-                                                                <div key={j.id} className="bg-blue-600 text-white text-[9px] p-1 rounded font-bold truncate">
-                                                                    {j.jobName}
-                                                                </div>
-                                                            ))}
-                                                        </div>
-                                                    </>
-                                                )}
-                                            </div>
-                                        ))}
-                                    </div>
+
+                                    {calendarView === 'month' ? (
+                                        <div className="grid grid-cols-7 border-t border-l">
+                                            {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(d => (
+                                                <div key={d} className="bg-slate-50 p-2 text-center text-[10px] font-black uppercase border-b border-r text-slate-400">{d}</div>
+                                            ))}
+                                            {calendarDays.map((dateStr, i) => (
+                                                <div key={i} onClick={() => dateStr && (setSelectedDate(dateStr), setActiveTab('schedule'))} className={`min-h-[110px] p-1 border-b border-r cursor-pointer hover:bg-slate-50 transition ${!dateStr ? 'bg-slate-50' : ''}`}>
+                                                    {dateStr && (
+                                                        <>
+                                                            <div className={`text-[10px] font-black p-1 inline-block rounded mb-1 ${dateStr === new Date().toISOString().split('T')[0] ? 'bg-orange-600 text-white' : 'text-slate-400'}`}>
+                                                                {dateStr.split('-')[2]}
+                                                            </div>
+                                                            <div className="space-y-1">
+                                                                {(data.jobsByDate[dateStr] || []).filter(j => j.jobName !== 'SELECT JOB').map(j => (
+                                                                    <div key={j.id} className="bg-blue-600 text-white text-[8px] p-1 rounded font-bold truncate border-l-2 border-blue-900 leading-tight">
+                                                                        {j.jobName}
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                        </>
+                                                    )}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    ) : (
+                                        <div className="p-20 text-center text-slate-400 italic">
+                                            <i className="fas fa-calendar-day text-4xl mb-4 text-slate-300"></i>
+                                            <p>{calendarView.toUpperCase()} View Active for {selectedDate}</p>
+                                            <p className="text-[10px] mt-2 font-bold text-orange-500">Syncing live from Dispatch Board...</p>
+                                        </div>
+                                    )}
                                 </div>
                             ) : (
                                 <div className="bg-white p-6 rounded shadow border">
-                                    <h2 className="text-sm font-black uppercase border-b pb-4 mb-4 italic">Rental Inventory</h2>
-                                    <table className="w-full text-left text-[11px]">
-                                        <thead className="bg-slate-900 text-white uppercase font-black"><tr><th className="p-2">Asset</th><th className="p-2">Vendor</th><th className="p-2">Status</th></tr></thead>
-                                        <tbody className="divide-y">
-                                            {rentals.map(r => (
-                                                <tr key={r.id} className="font-bold">
-                                                    <td className="p-2 uppercase">{r.name}</td>
-                                                    <td className="p-2 text-slate-500 uppercase">{r.vendor}</td>
-                                                    <td className="p-2 uppercase">{r.status}</td>
-                                                </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
+                                    <h2 className="text-sm font-black uppercase border-b pb-4 mb-4 italic">Rentals Active</h2>
+                                    <p className="text-slate-400 italic text-xs uppercase">Inventory tracking active.</p>
                                 </div>
                             )}
                         </div>
@@ -265,7 +249,6 @@
             );
         }
 
-        // Roster Data
         function getFullRoster() {
             return [
                 { id: 1, name: 'Mike Harris', subType: 'super' }, { id: 2, name: 'Michael Burchfield', subType: 'super' }, { id: 22, name: 'Nikolaos Patridis', subType: 'super' },
