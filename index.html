@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>HGE Dispatch v11.10 - Professional Fixed</title>
+    <title>HGE Dispatch v11.11 - Trucking Logic Fix</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
@@ -11,7 +11,6 @@
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <style>
         .draggable { cursor: move; user-select: none; transition: transform 0.2s; }
-        .draggable:active { transform: scale(0.95); }
         .bg-super { background: #1e40af; color: white; }
         .bg-foreman { background: #166534; color: white; }
         .bg-operator { background: #854d0e; color: white; }
@@ -19,7 +18,7 @@
         .bg-labor { background: #9a3412; color: white; }
         .bg-heavy { background: #1e293b; color: white; }
         .bg-misc { background: #64748b; color: white; }
-        .in-use { opacity: 0.2; grayscale: 100%; pointer-events: none; border: 1px dashed #ccc !important; }
+        .in-use { opacity: 0.2; grayscale: 100%; pointer-events: none; }
         .custom-scrollbar::-webkit-scrollbar { width: 6px; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
         @media print { .no-print { display: none !important; } }
@@ -38,21 +37,21 @@
             const [draggedItem, setDraggedItem] = useState(null);
 
             // Persistent State
-            const [assignments, setAssignments] = useState(() => JSON.parse(localStorage.getItem('hge_asgn_v1110')) || []);
-            const [jobs, setJobs] = useState(() => JSON.parse(localStorage.getItem('hge_jobs_v1110')) || [{id: 1, jobName: 'SELECT JOB', scope: '', start: '07:00', stop: '15:30'}]);
-            const [rentals, setRentals] = useState(() => JSON.parse(localStorage.getItem('hge_rent_v1110')) || []);
-            const [truckingData, setTruckingData] = useState(() => JSON.parse(localStorage.getItem('hge_truck_v1110')) || {
-                'Tino Rivera': { priority: '', jobNum: '', jobName: '', equip: '', load: '', unload: '', notes: '', contact: '', start: '07:00', stop: '15:30' },
-                'Benny Shepher': { priority: '', jobNum: '', jobName: '', equip: '', load: '', unload: '', notes: '', contact: '', start: '07:00', stop: '15:30' }
+            const [assignments, setAssignments] = useState(() => JSON.parse(localStorage.getItem('hge_asgn_v1111')) || []);
+            const [jobs, setJobs] = useState(() => JSON.parse(localStorage.getItem('hge_jobs_v1111')) || [{id: 1, jobName: 'SELECT JOB', scope: '', start: '07:00', stop: '15:30'}]);
+            const [rentals, setRentals] = useState(() => JSON.parse(localStorage.getItem('hge_rent_v1111')) || []);
+            const [truckingData, setTruckingData] = useState(() => JSON.parse(localStorage.getItem('hge_truck_v1111')) || {
+                'Tino Rivera': { priority: 'Medium', jobName: 'SELECT JOB', equip: '', load: '', unload: '', notes: '', contact: '', start: '07:00', stop: '15:30' },
+                'Benny Shepher': { priority: 'Medium', jobName: 'SELECT JOB', equip: '', load: '', unload: '', notes: '', contact: '', start: '07:00', stop: '15:30' }
             });
-            const [subHaulers, setSubHaulers] = useState(() => JSON.parse(localStorage.getItem('hge_sub_v1110')) || []);
+            const [subHaulers, setSubHaulers] = useState(() => JSON.parse(localStorage.getItem('hge_sub_v1111')) || []);
 
             useEffect(() => {
-                localStorage.setItem('hge_asgn_v1110', JSON.stringify(assignments));
-                localStorage.setItem('hge_jobs_v1110', JSON.stringify(jobs));
-                localStorage.setItem('hge_rent_v1110', JSON.stringify(rentals));
-                localStorage.setItem('hge_truck_v1110', JSON.stringify(truckingData));
-                localStorage.setItem('hge_sub_v1110', JSON.stringify(subHaulers));
+                localStorage.setItem('hge_asgn_v1111', JSON.stringify(assignments));
+                localStorage.setItem('hge_jobs_v1111', JSON.stringify(jobs));
+                localStorage.setItem('hge_rent_v1111', JSON.stringify(rentals));
+                localStorage.setItem('hge_truck_v1111', JSON.stringify(truckingData));
+                localStorage.setItem('hge_sub_v1111', JSON.stringify(subHaulers));
             }, [assignments, jobs, rentals, truckingData, subHaulers]);
 
             const employees = getFullRoster();
@@ -61,7 +60,6 @@
 
             const availablePersonnel = employees.filter(e => e.name.toLowerCase().includes(searchTerm.toLowerCase()));
             const availableGear = [...equipment, ...rentals.filter(r => r.status === 'Active')].filter(eq => eq.name.toLowerCase().includes(searchTerm.toLowerCase()));
-            
             const isAssigned = (name) => assignments.some(a => a.date === selectedDate && a.name === name);
 
             const handleDrop = (section, index) => {
@@ -72,36 +70,43 @@
 
             const removeAsgn = (id) => setAssignments(assignments.filter(a => a.id !== id));
 
+            const updateTrucking = (driver, field, value) => {
+                setTruckingData(prev => ({
+                    ...prev,
+                    [driver]: { ...prev[driver], [field]: value }
+                }));
+            };
+
             return (
                 <div className="min-h-screen pb-10">
-                    <header className="bg-slate-900 text-white p-4 flex justify-between items-center no-print sticky top-0 z-50">
+                    <header className="bg-slate-900 text-white p-4 flex justify-between items-center no-print sticky top-0 z-50 shadow-lg">
                         <div className="flex items-center gap-3">
                             <i className="fas fa-truck-monster text-orange-500 text-2xl"></i>
-                            <h1 className="text-xl font-black uppercase italic tracking-tighter">HGE Operations</h1>
+                            <h1 className="text-xl font-black uppercase italic tracking-tighter">HGE Operations Center</h1>
                         </div>
                         <nav className="flex gap-8 uppercase text-[10px] font-black tracking-[0.2em]">
-                            <button onClick={() => setActiveTab('schedule')} className={activeTab === 'schedule' ? 'text-orange-500' : 'text-slate-400'}>Schedule</button>
-                            <button onClick={() => setActiveTab('rentals')} className={activeTab === 'rentals' ? 'text-orange-500' : 'text-slate-400'}>Rentals</button>
-                            <button onClick={() => window.print()} className="bg-orange-600 text-white px-3 py-1 rounded">Print</button>
+                            <button onClick={() => setActiveTab('schedule')} className={activeTab === 'schedule' ? 'text-orange-500' : 'text-slate-400 hover:text-white transition'}>Schedule</button>
+                            <button onClick={() => setActiveTab('rentals')} className={activeTab === 'rentals' ? 'text-orange-500' : 'text-slate-400 hover:text-white transition'}>Rentals</button>
+                            <button onClick={() => window.print()} className="bg-orange-600 text-white px-3 py-1 rounded hover:bg-orange-500 transition">Print Board</button>
                         </nav>
                     </header>
 
                     <div className="flex flex-col lg:flex-row p-4 gap-6">
                         {/* SIDEBAR */}
                         <aside className="w-full lg:w-72 no-print">
-                            <div className="bg-white p-4 rounded-xl shadow-md border border-slate-200 sticky top-20">
+                            <div className="bg-white p-4 rounded-xl shadow border border-slate-200 sticky top-20">
                                 <div className="relative mb-4">
                                     <i className="fas fa-search absolute left-3 top-3 text-slate-300"></i>
-                                    <input type="text" placeholder="FIND RESOURCE..." className="w-full pl-9 pr-4 py-2 bg-slate-50 border rounded-lg text-[10px] font-bold uppercase" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
+                                    <input type="text" placeholder="FILTER ROSTER..." className="w-full pl-9 pr-4 py-2 bg-slate-50 border rounded-lg text-[10px] font-bold uppercase focus:ring-2 focus:ring-orange-500 outline-none" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
                                 </div>
-                                <input type="date" value={selectedDate} onChange={e => setSelectedDate(e.target.value)} className="w-full p-2 border rounded font-bold text-xs mb-4" />
+                                <input type="date" value={selectedDate} onChange={e => setSelectedDate(e.target.value)} className="w-full p-2 border rounded font-bold text-xs mb-4 cursor-pointer hover:bg-slate-50" />
                                 
                                 <div className="h-[65vh] overflow-y-auto pr-2 custom-scrollbar">
-                                    <h3 className="text-[10px] font-black text-slate-400 border-b mb-2 uppercase italic">Personnel</h3>
+                                    <h3 className="text-[10px] font-black text-slate-400 border-b mb-2 uppercase italic tracking-wider">Personnel</h3>
                                     {availablePersonnel.map(e => (
                                         <div key={e.id} draggable onDragStart={() => setDraggedItem({...e, category: 'people'})} className={`p-2 mb-1 rounded text-[10px] font-bold shadow-sm draggable bg-${e.subType} ${isAssigned(e.name)?'in-use':''}`}>{e.name}</div>
                                     ))}
-                                    <h3 className="text-[10px] font-black text-slate-400 border-b mt-6 mb-2 uppercase italic">Equipment Fleet</h3>
+                                    <h3 className="text-[10px] font-black text-slate-400 border-b mt-6 mb-2 uppercase italic tracking-wider">Equipment Fleet</h3>
                                     {availableGear.map((eq, i) => (
                                         <div key={i} draggable onDragStart={() => setDraggedItem({...eq, category: 'equip'})} className={`p-2 mb-1 rounded text-[10px] font-bold shadow-sm draggable bg-${eq.subType==='misc'?'misc':'heavy'} ${isAssigned(eq.name)?'in-use':''}`}>{eq.name}</div>
                                     ))}
@@ -116,41 +121,43 @@
                                     {/* PRODUCTION JOBS */}
                                     <section>
                                         <div className="flex justify-between items-center mb-4 border-b pb-2">
-                                            <h2 className="text-sm font-black uppercase italic tracking-widest text-slate-700">Production Site Dispatch</h2>
-                                            <button onClick={() => setJobs([...jobs, {id: Date.now(), jobName: 'SELECT JOB', scope: '', start: '07:00', stop: '15:30'}])} className="text-blue-600 text-[10px] font-bold no-print">+ ADD JOB BLOCK</button>
+                                            <h2 className="text-sm font-black uppercase italic tracking-widest text-slate-700 flex items-center gap-2">
+                                                <i className="fas fa-hard-hat text-orange-500"></i> Production Site Dispatch
+                                            </h2>
+                                            <button onClick={() => setJobs([...jobs, {id: Date.now(), jobName: 'SELECT JOB', scope: '', start: '07:00', stop: '15:30'}])} className="text-blue-600 text-[10px] font-black no-print hover:underline tracking-widest">+ ADD SITE JOB</button>
                                         </div>
                                         {jobs.map((job, idx) => (
-                                            <div key={job.id} onDragOver={e => e.preventDefault()} onDrop={() => handleDrop('site', idx)} className="bg-white rounded-lg shadow border-l-4 border-blue-600 mb-4 overflow-hidden">
+                                            <div key={job.id} onDragOver={e => e.preventDefault()} onDrop={() => handleDrop('site', idx)} className="bg-white rounded-lg shadow-md border-l-4 border-blue-600 mb-4 overflow-hidden">
                                                 <div className="bg-slate-900 p-2 flex gap-3 text-white items-center">
-                                                    <select className="bg-slate-800 text-yellow-400 font-bold text-[10px] p-1 rounded uppercase border-none w-48" value={job.jobName} onChange={e => {let n=[...jobs]; n[idx].jobName=e.target.value; setJobs(n)}}>
+                                                    <select className="bg-slate-800 text-yellow-400 font-bold text-[10px] p-1 rounded uppercase border-none w-56 cursor-pointer" value={job.jobName} onChange={e => {let n=[...jobs]; n[idx].jobName=e.target.value; setJobs(n)}}>
                                                         <option>SELECT JOB</option>
                                                         {jobsList.map(j => <option key={j.id} value={j.name}>{j.id} - {j.name}</option>)}
                                                     </select>
                                                     <div className="flex items-center gap-2 text-[10px]">
-                                                        <input type="time" value={job.start} onChange={e => {let n=[...jobs]; n[idx].start=e.target.value; setJobs(n)}} className="bg-slate-800 p-1 rounded border-none" />
+                                                        <input type="time" value={job.start} onChange={e => {let n=[...jobs]; n[idx].start=e.target.value; setJobs(n)}} className="bg-slate-800 p-1 rounded border-none cursor-pointer" />
                                                         <span className="text-slate-500 font-bold">TO</span>
-                                                        <input type="time" value={job.stop} onChange={e => {let n=[...jobs]; n[idx].stop=e.target.value; setJobs(n)}} className="bg-slate-800 p-1 rounded border-none" />
+                                                        <input type="time" value={job.stop} onChange={e => {let n=[...jobs]; n[idx].stop=e.target.value; setJobs(n)}} className="bg-slate-800 p-1 rounded border-none cursor-pointer" />
                                                     </div>
-                                                    <input className="bg-slate-800 text-slate-300 text-[10px] p-1 flex-1 rounded border-none" value={job.scope} onChange={e => {let n=[...jobs]; n[idx].scope=e.target.value; setJobs(n)}} placeholder="SCOPE OF WORK..." />
-                                                    <button onClick={() => setJobs(jobs.filter(j => j.id !== job.id))} className="text-slate-600 hover:text-red-500 no-print"><i className="fas fa-trash"></i></button>
+                                                    <input className="bg-slate-800 text-slate-300 text-[10px] p-1 flex-1 rounded border-none focus:ring-1 focus:ring-blue-500 outline-none" value={job.scope} onChange={e => {let n=[...jobs]; n[idx].scope=e.target.value; setJobs(n)}} placeholder="SCOPE OF WORK..." />
+                                                    <button onClick={() => setJobs(jobs.filter(j => j.id !== job.id))} className="text-slate-600 hover:text-red-500 no-print transition"><i className="fas fa-trash"></i></button>
                                                 </div>
                                                 <div className="p-3 grid grid-cols-2 gap-4">
                                                     <div>
-                                                        <span className="text-[9px] font-black text-slate-400 uppercase">Personnel</span>
+                                                        <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Personnel</span>
                                                         <div className="flex flex-wrap gap-2 mt-1 min-h-[35px]">
                                                             {assignments.filter(a => a.date === selectedDate && a.section === 'site' && a.index === idx && a.category === 'people').map(a => (
-                                                                <div key={a.id} className={`p-2 rounded flex items-center gap-2 bg-${a.subType} min-w-[110px]`}>
+                                                                <div key={a.id} className={`p-2 rounded flex items-center gap-2 bg-${a.subType} min-w-[120px] shadow-sm`}>
                                                                     <span className="text-[10px] font-bold uppercase flex-1">{a.name}</span>
                                                                     <i onClick={() => removeAsgn(a.id)} className="fas fa-times opacity-40 hover:opacity-100 cursor-pointer"></i>
                                                                 </div>
                                                             ))}
                                                         </div>
                                                     </div>
-                                                    <div className="border-l pl-4">
-                                                        <span className="text-[9px] font-black text-slate-400 uppercase">Equipment/Fleet</span>
+                                                    <div className="border-l pl-4 border-slate-100">
+                                                        <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Equipment Fleet</span>
                                                         <div className="flex flex-wrap gap-2 mt-1 min-h-[35px]">
                                                             {assignments.filter(a => a.date === selectedDate && a.section === 'site' && a.index === idx && a.category === 'equip').map(a => (
-                                                                <div key={a.id} className="p-2 rounded flex items-center gap-2 bg-heavy min-w-[110px]">
+                                                                <div key={a.id} className="p-2 rounded flex items-center gap-2 bg-heavy min-w-[120px] shadow-sm">
                                                                     <span className="text-[10px] font-bold uppercase flex-1 italic text-white">{a.name}</span>
                                                                     <i onClick={() => removeAsgn(a.id)} className="fas fa-times opacity-40 hover:opacity-100 cursor-pointer text-white"></i>
                                                                 </div>
@@ -162,30 +169,56 @@
                                         ))}
                                     </section>
 
-                                    {/* TRUCKING */}
+                                    {/* COMPANY TRUCKING */}
                                     <section>
-                                        <h2 className="text-sm font-black uppercase italic tracking-widest text-slate-700 mb-4 flex items-center gap-2"><i className="fas fa-truck-moving text-purple-600"></i> Company Trucking</h2>
+                                        <h2 className="text-sm font-black uppercase italic tracking-widest text-slate-700 mb-4 flex items-center gap-2">
+                                            <i className="fas fa-truck-moving text-purple-600"></i> Company Trucking Logistics
+                                        </h2>
                                         {['Tino Rivera', 'Benny Shepher'].map(driver => (
-                                            <div key={driver} onDragOver={e => e.preventDefault()} onDrop={() => handleDrop('truck', driver)} className="bg-white rounded-lg shadow border-t-4 border-purple-600 mb-6 overflow-hidden">
+                                            <div key={driver} onDragOver={e => e.preventDefault()} onDrop={() => handleDrop('truck', driver)} className="bg-white rounded-lg shadow-md border-t-4 border-purple-600 mb-6 overflow-hidden">
                                                 <div className="bg-slate-900 p-2 text-white flex justify-between items-center">
-                                                    <span className="font-bold text-[11px] uppercase text-purple-400">{driver}</span>
+                                                    <span className="font-black text-[11px] uppercase text-purple-400 tracking-wider px-2">{driver}</span>
                                                     <div className="flex gap-2 text-[10px]">
-                                                        <input type="time" value={truckingData[driver].start} onChange={e => setTruckingData({...truckingData, [driver]: {...truckingData[driver], start: e.target.value}})} className="bg-slate-800 rounded p-1 border-none" />
-                                                        <input type="time" value={truckingData[driver].stop} onChange={e => setTruckingData({...truckingData, [driver]: {...truckingData[driver], stop: e.target.value}})} className="bg-slate-800 rounded p-1 border-none" />
+                                                        <input type="time" value={truckingData[driver].start} onChange={e => updateTrucking(driver, 'start', e.target.value)} className="bg-slate-800 rounded p-1 border-none cursor-pointer" />
+                                                        <input type="time" value={truckingData[driver].stop} onChange={e => updateTrucking(driver, 'stop', e.target.value)} className="bg-slate-800 rounded p-1 border-none cursor-pointer" />
                                                     </div>
                                                 </div>
-                                                <div className="p-3 grid grid-cols-4 lg:grid-cols-8 gap-2 bg-slate-50 border-b">
-                                                    {['priority', 'jobNum', 'jobName', 'equip', 'load', 'unload', 'notes', 'contact'].map(f => (
+                                                <div className="p-3 grid grid-cols-4 lg:grid-cols-7 gap-3 bg-slate-50 border-b">
+                                                    <div>
+                                                        <label className="text-[8px] font-black text-slate-400 uppercase">Priority</label>
+                                                        <select 
+                                                            className={`w-full p-1 text-[10px] border rounded font-black uppercase ${truckingData[driver].priority === 'High' ? 'text-red-600' : truckingData[driver].priority === 'Medium' ? 'text-orange-600' : 'text-green-600'}`}
+                                                            value={truckingData[driver].priority} 
+                                                            onChange={e => updateTrucking(driver, 'priority', e.target.value)}
+                                                        >
+                                                            <option value="Low">Low</option>
+                                                            <option value="Medium">Medium</option>
+                                                            <option value="High">High</option>
+                                                        </select>
+                                                    </div>
+                                                    <div className="col-span-1 lg:col-span-1">
+                                                        <label className="text-[8px] font-black text-slate-400 uppercase">Project Job</label>
+                                                        <select 
+                                                            className="w-full p-1 text-[10px] border rounded font-bold uppercase"
+                                                            value={truckingData[driver].jobName} 
+                                                            onChange={e => updateTrucking(driver, 'jobName', e.target.value)}
+                                                        >
+                                                            <option>SELECT JOB</option>
+                                                            {jobsList.map(j => <option key={j.id} value={j.name}>{j.id} - {j.name}</option>)}
+                                                        </select>
+                                                    </div>
+                                                    {['equip', 'load', 'unload', 'notes', 'contact'].map(f => (
                                                         <div key={f}>
-                                                            <label className="text-[8px] font-bold text-slate-400 uppercase">{f}</label>
-                                                            <input className="w-full p-1 text-[10px] border rounded uppercase font-bold" value={truckingData[driver][f]} onChange={e => setTruckingData({...truckingData, [driver]: {...truckingData[driver], [f]: e.target.value}})} />
+                                                            <label className="text-[8px] font-black text-slate-400 uppercase">{f === 'equip' ? 'Haul Item' : f}</label>
+                                                            <input className="w-full p-1 text-[10px] border rounded uppercase font-bold outline-none focus:ring-1 focus:ring-purple-400" value={truckingData[driver][f]} onChange={e => updateTrucking(driver, f, e.target.value)} />
                                                         </div>
                                                     ))}
                                                 </div>
-                                                <div className="p-2 flex flex-wrap gap-2 min-h-[30px]">
+                                                <div className="p-2 flex flex-wrap gap-2 min-h-[30px] bg-white">
+                                                    <span className="text-[8px] w-full font-bold text-slate-300 uppercase block">Equipment/Trailer Attachments:</span>
                                                     {assignments.filter(a => a.date === selectedDate && a.section === 'truck' && a.index === driver).map(a => (
-                                                        <div key={a.id} className="bg-slate-200 p-1 px-2 rounded text-[9px] font-black uppercase flex items-center gap-2">
-                                                            {a.name} <i onClick={() => removeAsgn(a.id)} className="fas fa-times text-red-500 cursor-pointer"></i>
+                                                        <div key={a.id} className="bg-slate-100 border border-slate-200 p-1 px-2 rounded text-[9px] font-black uppercase flex items-center gap-2 shadow-sm">
+                                                            {a.name} <i onClick={() => removeAsgn(a.id)} className="fas fa-times text-red-500 cursor-pointer hover:scale-125 transition"></i>
                                                         </div>
                                                     ))}
                                                 </div>
@@ -195,26 +228,26 @@
 
                                     {/* SUB HAULING */}
                                     <section>
-                                        <div className="flex justify-between items-center mb-4">
+                                        <div className="flex justify-between items-center mb-4 border-b pb-2">
                                             <h2 className="text-sm font-black uppercase italic tracking-widest text-slate-700">Sub Hauling Dispatch</h2>
-                                            <button onClick={() => setSubHaulers([...subHaulers, {id: Date.now(), broker: '', qty: '1', type: 'S10', job: '', load: '', unload: '', notes: ''}])} className="bg-red-600 text-white px-3 py-1 rounded text-[10px] font-bold no-print">+ ADD SUB TRUCK</button>
+                                            <button onClick={() => setSubHaulers([...subHaulers, {id: Date.now(), broker: '', qty: '1', type: 'S10', job: '', load: '', unload: '', notes: ''}])} className="bg-red-600 text-white px-3 py-1 rounded text-[10px] font-bold no-print hover:bg-red-500 transition">+ ADD SUB TRUCK</button>
                                         </div>
-                                        <div className="bg-white rounded shadow overflow-x-auto">
+                                        <div className="bg-white rounded-lg shadow overflow-x-auto border border-slate-200">
                                             <table className="w-full text-[10px]">
-                                                <thead className="bg-slate-900 text-white uppercase">
+                                                <thead className="bg-slate-900 text-white uppercase tracking-wider">
                                                     <tr><th className="p-2 text-left">Broker</th><th className="p-2 w-12 text-center">Qty</th><th className="p-2">Type</th><th className="p-2">Job</th><th className="p-2">Load</th><th className="p-2">Unload</th><th className="p-2">Notes</th><th className="p-2 no-print"></th></tr>
                                                 </thead>
-                                                <tbody className="divide-y">
+                                                <tbody className="divide-y divide-slate-100">
                                                     {subHaulers.map((sub, sIdx) => (
-                                                        <tr key={sub.id} className="hover:bg-slate-50">
-                                                            <td className="p-1"><input className="w-full border rounded p-1 uppercase font-bold text-red-700" value={sub.broker} onChange={e => {let n=[...subHaulers]; n[sIdx].broker=e.target.value; setSubHaulers(n)}} /></td>
-                                                            <td className="p-1"><input className="w-full border rounded p-1 text-center" value={sub.qty} onChange={e => {let n=[...subHaulers]; n[sIdx].qty=e.target.value; setSubHaulers(n)}} /></td>
-                                                            <td className="p-1"><input className="w-full border rounded p-1 uppercase" value={sub.type} onChange={e => {let n=[...subHaulers]; n[sIdx].type=e.target.value; setSubHaulers(n)}} /></td>
+                                                        <tr key={sub.id} className="hover:bg-slate-50 transition">
+                                                            <td className="p-1"><input className="w-full border rounded p-1 uppercase font-black text-red-700" value={sub.broker} onChange={e => {let n=[...subHaulers]; n[sIdx].broker=e.target.value; setSubHaulers(n)}} placeholder="BROKER" /></td>
+                                                            <td className="p-1"><input className="w-full border rounded p-1 text-center font-bold" value={sub.qty} onChange={e => {let n=[...subHaulers]; n[sIdx].qty=e.target.value; setSubHaulers(n)}} /></td>
+                                                            <td className="p-1"><input className="w-full border rounded p-1 uppercase font-bold" value={sub.type} onChange={e => {let n=[...subHaulers]; n[sIdx].type=e.target.value; setSubHaulers(n)}} /></td>
                                                             <td className="p-1"><input className="w-full border rounded p-1 uppercase" value={sub.job} onChange={e => {let n=[...subHaulers]; n[sIdx].job=e.target.value; setSubHaulers(n)}} /></td>
                                                             <td className="p-1"><input className="w-full border rounded p-1 uppercase" value={sub.load} onChange={e => {let n=[...subHaulers]; n[sIdx].load=e.target.value; setSubHaulers(n)}} /></td>
                                                             <td className="p-1"><input className="w-full border rounded p-1 uppercase" value={sub.unload} onChange={e => {let n=[...subHaulers]; n[sIdx].unload=e.target.value; setSubHaulers(n)}} /></td>
                                                             <td className="p-1"><input className="w-full border rounded p-1 italic" value={sub.notes} onChange={e => {let n=[...subHaulers]; n[sIdx].notes=e.target.value; setSubHaulers(n)}} /></td>
-                                                            <td className="p-1 no-print text-center"><button onClick={() => setSubHaulers(subHaulers.filter(h => h.id !== sub.id))} className="text-red-300 hover:text-red-600"><i className="fas fa-trash"></i></button></td>
+                                                            <td className="p-1 no-print text-center"><button onClick={() => setSubHaulers(subHaulers.filter(h => h.id !== sub.id))} className="text-red-300 hover:text-red-600 transition"><i className="fas fa-trash"></i></button></td>
                                                         </tr>
                                                     ))}
                                                 </tbody>
@@ -223,17 +256,17 @@
                                     </section>
                                 </div>
                             ) : (
-                                <div className="bg-white p-6 rounded shadow border">
-                                    <h2 className="text-lg font-black uppercase mb-4">Rental Inventory</h2>
+                                <div className="bg-white p-6 rounded shadow border border-slate-200">
+                                    <h2 className="text-lg font-black uppercase mb-4 italic tracking-wider border-b pb-2">Rental Inventory Management</h2>
                                     <form onSubmit={(e) => {
                                         e.preventDefault();
                                         const fd = new FormData(e.target);
                                         setRentals([...rentals, { id: Date.now(), name: fd.get('n').toUpperCase(), vendor: fd.get('v').toUpperCase(), status: 'Active', subType: 'misc' }]);
                                         e.target.reset();
-                                    }} className="flex gap-4 mb-8 bg-slate-50 p-4 rounded border-2 border-dashed">
-                                        <input name="n" placeholder="ASSET NAME" className="border p-2 rounded text-xs flex-1 uppercase font-bold" required />
-                                        <input name="v" placeholder="VENDOR" className="border p-2 rounded text-xs flex-1 uppercase font-bold" required />
-                                        <button type="submit" className="bg-blue-600 text-white px-6 py-2 rounded font-bold text-xs uppercase">Register Rental</button>
+                                    }} className="flex gap-4 mb-8 bg-slate-50 p-4 rounded border-2 border-dashed border-slate-200">
+                                        <input name="n" placeholder="ASSET NAME (E.G. 19' SCISSOR LIFT)" className="border p-2 rounded text-xs flex-1 uppercase font-bold" required />
+                                        <input name="v" placeholder="VENDOR (E.G. UNITED)" className="border p-2 rounded text-xs flex-1 uppercase font-bold" required />
+                                        <button type="submit" className="bg-blue-600 text-white px-6 py-2 rounded font-bold text-xs uppercase hover:bg-blue-500 transition">Register Rental</button>
                                     </form>
                                     <table className="w-full text-left text-[11px] border">
                                         <thead className="bg-slate-900 text-white uppercase"><tr><th className="p-2">Asset</th><th className="p-2">Vendor</th><th className="p-2 text-center">Status</th><th className="p-2"></th></tr></thead>
@@ -244,8 +277,8 @@
                                                     <td className="p-2 uppercase text-slate-500">{r.vendor}</td>
                                                     <td className="p-2 text-center"><span className={`px-2 py-1 rounded font-black ${r.status==='Active'?'bg-green-100 text-green-700':'bg-red-100 text-red-700'}`}>{r.status}</span></td>
                                                     <td className="p-2 text-right">
-                                                        <button onClick={() => setRentals(rentals.map(x => x.id === r.id ? {...x, status: x.status === 'Active' ? 'Returned' : 'Active'} : x))} className="text-blue-600 font-bold underline mr-4 uppercase">Toggle</button>
-                                                        <button onClick={() => setRentals(rentals.filter(x => x.id !== r.id))} className="text-red-400 font-bold underline uppercase">Del</button>
+                                                        <button onClick={() => setRentals(rentals.map(x => x.id === r.id ? {...x, status: x.status === 'Active' ? 'Returned' : 'Active'} : x))} className="text-blue-600 font-bold underline mr-4 uppercase text-[9px]">Toggle</button>
+                                                        <button onClick={() => setRentals(rentals.filter(x => x.id !== r.id))} className="text-red-400 font-bold underline uppercase text-[9px]">Delete</button>
                                                     </td>
                                                 </tr>
                                             ))}
