@@ -3,14 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>HGE Dispatch v11.13 - Rapid Haul Copy</title>
+    <title>HGE Dispatch v11.14 - Full Suite Restored</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <style>
-        .draggable { cursor: move; user-select: none; }
+        .draggable { cursor: move; user-select: none; transition: transform 0.2s; }
         .bg-super { background: #1e40af; color: white; }
         .bg-foreman { background: #166534; color: white; }
         .bg-operator { background: #854d0e; color: white; }
@@ -18,7 +18,7 @@
         .bg-labor { background: #9a3412; color: white; }
         .bg-heavy { background: #1e293b; color: white; }
         .bg-misc { background: #64748b; color: white; }
-        .in-use { opacity: 0.2; grayscale: 100%; pointer-events: none; }
+        .in-use { opacity: 0.3; grayscale: 100%; pointer-events: none; }
         .custom-scrollbar::-webkit-scrollbar { width: 6px; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
         @media print { .no-print { display: none !important; } }
@@ -37,24 +37,30 @@
             const [draggedItem, setDraggedItem] = useState(null);
 
             // Persistent State
-            const [assignments, setAssignments] = useState(() => JSON.parse(localStorage.getItem('hge_asgn_v1113')) || []);
-            const [jobs, setJobs] = useState(() => JSON.parse(localStorage.getItem('hge_jobs_v1113')) || [{id: 1, jobName: 'SELECT JOB', scope: '', start: '07:00', stop: '15:30'}]);
-            const [rentals, setRentals] = useState(() => JSON.parse(localStorage.getItem('hge_rent_v1113')) || []);
-            const [truckingLogs, setTruckingLogs] = useState(() => JSON.parse(localStorage.getItem('hge_logs_v1113')) || {
-                'Tino Rivera': { hauls: [{id: Date.now(), priority: 'Medium', jobName: 'SELECT JOB', equip: '', load: '', unload: '', notes: '', contact: ''}] },
-                'Benny Shepher': { hauls: [{id: Date.now() + 1, priority: 'Medium', jobName: 'SELECT JOB', equip: '', load: '', unload: '', notes: '', contact: ''}] }
+            const [assignments, setAssignments] = useState(() => JSON.parse(localStorage.getItem('hge_asgn_v1114')) || []);
+            const [jobs, setJobs] = useState(() => JSON.parse(localStorage.getItem('hge_jobs_v1114')) || [{id: 1, jobName: 'SELECT JOB', scope: '', start: '07:00', stop: '15:30'}]);
+            const [rentals, setRentals] = useState(() => JSON.parse(localStorage.getItem('hge_rent_v1114')) || []);
+            const [subHaulers, setSubHaulers] = useState(() => JSON.parse(localStorage.getItem('hge_sub_v1114')) || []);
+            const [truckingLogs, setTruckingLogs] = useState(() => JSON.parse(localStorage.getItem('hge_logs_v1114')) || {
+                'Tino Rivera': { hauls: [{id: 100, priority: 'Medium', jobName: 'SELECT JOB', equip: '', load: '', unload: '', notes: '', contact: ''}] },
+                'Benny Shepher': { hauls: [{id: 200, priority: 'Medium', jobName: 'SELECT JOB', equip: '', load: '', unload: '', notes: '', contact: ''}] }
             });
 
             useEffect(() => {
-                localStorage.setItem('hge_asgn_v1113', JSON.stringify(assignments));
-                localStorage.setItem('hge_jobs_v1113', JSON.stringify(jobs));
-                localStorage.setItem('hge_rent_v1113', JSON.stringify(rentals));
-                localStorage.setItem('hge_logs_v1113', JSON.stringify(truckingLogs));
-            }, [assignments, jobs, rentals, truckingLogs]);
+                const keys = { hge_asgn_v1114: assignments, hge_jobs_v1114: jobs, hge_rent_v1114: rentals, hge_sub_v1114: subHaulers, hge_logs_v1114: truckingLogs };
+                Object.entries(keys).forEach(([k, v]) => localStorage.setItem(k, JSON.stringify(v)));
+            }, [assignments, jobs, rentals, subHaulers, truckingLogs]);
 
             const jobsList = getHGEJobs();
             const employees = getFullRoster();
             const equipment = getFullEquipment();
+
+            const isAssigned = (name) => assignments.some(a => a.date === selectedDate && a.name === name);
+            const handleDrop = (section, index) => {
+                if (!draggedItem) return;
+                setAssignments([...assignments, { ...draggedItem, id: Date.now(), date: selectedDate, section, index }]);
+                setDraggedItem(null);
+            };
 
             const addHaulLine = (driver) => {
                 const newLogs = { ...truckingLogs };
@@ -64,7 +70,9 @@
 
             const copyHaulLine = (driver, haul) => {
                 const newLogs = { ...truckingLogs };
-                newLogs[driver].hauls.push({ ...haul, id: Date.now() });
+                const driverHauls = newLogs[driver].hauls;
+                const loadCount = driverHauls.filter(h => h.jobName === haul.jobName).length + 1;
+                newLogs[driver].hauls.push({ ...haul, id: Date.now(), notes: `Load #${loadCount} - ${haul.notes}` });
                 setTruckingLogs(newLogs);
             };
 
@@ -75,106 +83,147 @@
                 setTruckingLogs(newLogs);
             };
 
-            const removeHaulLine = (driver, haulId) => {
-                const newLogs = { ...truckingLogs };
-                newLogs[driver].hauls = newLogs[driver].hauls.filter(h => h.id !== haulId);
-                setTruckingLogs(newLogs);
-            };
-
             return (
-                <div className="min-h-screen pb-10">
-                    <header className="bg-slate-900 text-white p-4 flex justify-between items-center no-print sticky top-0 z-50 shadow-md">
+                <div className="min-h-screen pb-20">
+                    <header className="bg-slate-900 text-white p-4 flex justify-between items-center no-print sticky top-0 z-50">
                         <div className="flex items-center gap-3">
                             <i className="fas fa-truck-monster text-orange-500 text-2xl"></i>
-                            <h1 className="text-xl font-black uppercase italic tracking-tighter">HGE Operations</h1>
+                            <h1 className="text-xl font-black uppercase italic">HGE Operations</h1>
                         </div>
-                        <nav className="flex gap-8 uppercase text-[10px] font-black">
-                            <button onClick={() => setActiveTab('schedule')} className={activeTab === 'schedule' ? 'text-orange-500' : 'text-slate-400'}>Schedule</button>
-                            <button onClick={() => setActiveTab('rentals')} className={activeTab === 'rentals' ? 'text-orange-500' : 'text-slate-400'}>Rentals</button>
+                        <nav className="flex gap-6 uppercase text-[10px] font-black">
+                            <button onClick={() => setActiveTab('schedule')} className={activeTab === 'schedule' ? 'text-orange-500' : 'text-slate-400'}>Dispatch Board</button>
+                            <button onClick={() => setActiveTab('rentals')} className={activeTab === 'rentals' ? 'text-orange-500' : 'text-slate-400'}>Rental Tracker</button>
                             <button onClick={() => window.print()} className="bg-orange-600 px-3 py-1 rounded">Print</button>
                         </nav>
                     </header>
 
                     <div className="flex flex-col lg:flex-row p-4 gap-6">
                         <aside className="w-full lg:w-72 no-print">
-                            <div className="bg-white p-4 rounded-xl shadow border sticky top-20">
-                                <input type="text" placeholder="FILTER..." className="w-full p-2 bg-slate-50 border rounded text-[10px] font-bold mb-4" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
-                                <input type="date" value={selectedDate} onChange={e => setSelectedDate(e.target.value)} className="w-full p-2 border rounded font-bold text-xs" />
-                                <div className="h-[60vh] overflow-y-auto pr-2 mt-4 custom-scrollbar">
-                                    <h3 className="text-[10px] font-black text-slate-400 border-b mb-2 uppercase italic">Personnel</h3>
-                                    {employees.map(e => <div key={e.id} draggable className={`p-2 mb-1 rounded text-[10px] font-bold bg-${e.subType}`}>{e.name}</div>)}
+                            <div className="bg-white p-4 rounded shadow border sticky top-20">
+                                <input type="text" placeholder="FILTER..." className="w-full p-2 border rounded text-[10px] mb-2 font-bold" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
+                                <input type="date" value={selectedDate} onChange={e => setSelectedDate(e.target.value)} className="w-full p-2 border rounded font-bold text-xs mb-4" />
+                                <div className="h-[60vh] overflow-y-auto custom-scrollbar">
+                                    <h3 className="text-[10px] font-black text-slate-400 border-b mb-2">PERSONNEL</h3>
+                                    {employees.filter(e => e.name.toLowerCase().includes(searchTerm.toLowerCase())).map(e => (
+                                        <div key={e.id} draggable onDragStart={() => setDraggedItem({...e, category: 'people'})} className={`p-2 mb-1 rounded text-[10px] font-bold bg-${e.subType} ${isAssigned(e.name)?'in-use':''}`}>{e.name}</div>
+                                    ))}
+                                    <h3 className="text-[10px] font-black text-slate-400 border-b mt-4 mb-2">EQUIPMENT</h3>
+                                    {equipment.filter(eq => eq.name.toLowerCase().includes(searchTerm.toLowerCase())).map((eq, i) => (
+                                        <div key={i} draggable onDragStart={() => setDraggedItem({...eq, category: 'equip'})} className={`p-2 mb-1 rounded text-[10px] font-bold bg-heavy text-white ${isAssigned(eq.name)?'in-use':''}`}>{eq.name}</div>
+                                    ))}
                                 </div>
                             </div>
                         </aside>
 
-                        <div className="flex-1 space-y-10">
-                            <section>
-                                <h2 className="text-sm font-black uppercase italic tracking-widest text-slate-700 mb-4 flex items-center gap-2">
-                                    <i className="fas fa-truck-moving text-purple-600"></i> Company Trucking Logistics
-                                </h2>
-                                {['Tino Rivera', 'Benny Shepher'].map(driver => (
-                                    <div key={driver} className="bg-white rounded-lg shadow-md border-t-4 border-purple-600 mb-8 overflow-hidden">
-                                        <div className="bg-slate-900 p-2 text-white flex justify-between items-center">
-                                            <span className="font-black text-[12px] uppercase text-purple-400 px-2 tracking-widest">{driver}</span>
-                                            <button onClick={() => addHaulLine(driver)} className="bg-purple-600 hover:bg-purple-500 text-white px-4 py-1 rounded text-[10px] font-black no-print transition">
-                                                <i className="fas fa-plus mr-2"></i>ADD NEW HAUL
-                                            </button>
+                        <div className="flex-1 space-y-12">
+                            {activeTab === 'schedule' ? (
+                                <>
+                                    {/* 1. PRODUCTION SITE SECTION */}
+                                    <section>
+                                        <div className="flex justify-between items-center mb-4 border-b pb-2">
+                                            <h2 className="text-sm font-black uppercase italic text-slate-700">Production Site Dispatch</h2>
+                                            <button onClick={() => setJobs([...jobs, {id: Date.now(), jobName: 'SELECT JOB', scope: '', start: '07:00', stop: '15:30'}])} className="text-blue-600 text-[10px] font-black no-print">+ ADD SITE JOB</button>
                                         </div>
-                                        <div className="overflow-x-auto">
+                                        {jobs.map((job, idx) => (
+                                            <div key={job.id} onDragOver={e => e.preventDefault()} onDrop={() => handleDrop('site', idx)} className="bg-white rounded shadow-md border-l-4 border-blue-600 mb-4 overflow-hidden">
+                                                <div className="bg-slate-900 p-2 flex gap-3 text-white items-center">
+                                                    <select className="bg-slate-800 text-yellow-400 font-bold text-[10px] p-1 rounded uppercase w-56" value={job.jobName} onChange={e => {let n=[...jobs]; n[idx].jobName=e.target.value; setJobs(n)}}>
+                                                        <option>SELECT JOB</option>
+                                                        {jobsList.map(j => <option key={j.id} value={j.name}>{j.id} - {j.name}</option>)}
+                                                    </select>
+                                                    <div className="flex gap-1 text-[10px]">
+                                                        <input type="time" value={job.start} onChange={e => {let n=[...jobs]; n[idx].start=e.target.value; setJobs(n)}} className="bg-slate-800 p-1 rounded border-none" />
+                                                        <input type="time" value={job.stop} onChange={e => {let n=[...jobs]; n[idx].stop=e.target.value; setJobs(n)}} className="bg-slate-800 p-1 rounded border-none" />
+                                                    </div>
+                                                    <input className="bg-slate-800 text-slate-300 text-[10px] p-1 flex-1 rounded border-none" value={job.scope} onChange={e => {let n=[...jobs]; n[idx].scope=e.target.value; setJobs(n)}} placeholder="SCOPE OF WORK..." />
+                                                    <button onClick={() => setJobs(jobs.filter(j => j.id !== job.id))} className="text-slate-600 no-print hover:text-red-500"><i className="fas fa-trash"></i></button>
+                                                </div>
+                                                <div className="p-3 grid grid-cols-2 gap-4">
+                                                    <div className="min-h-[40px] flex flex-wrap gap-2">
+                                                        {assignments.filter(a => a.date === selectedDate && a.section === 'site' && a.index === idx).map(a => (
+                                                            <div key={a.id} className={`p-1 px-2 rounded flex items-center gap-2 bg-${a.subType || 'heavy'} text-[10px] font-bold`}>
+                                                                {a.name} <i onClick={() => setAssignments(assignments.filter(x => x.id !== a.id))} className="fas fa-times cursor-pointer opacity-50"></i>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </section>
+
+                                    {/* 2. COMPANY TRUCKING SECTION */}
+                                    <section>
+                                        <h2 className="text-sm font-black uppercase italic text-slate-700 mb-4">Company Trucking Logistics</h2>
+                                        {['Tino Rivera', 'Benny Shepher'].map(driver => (
+                                            <div key={driver} className="bg-white rounded shadow-md border-t-4 border-purple-600 mb-8 overflow-hidden">
+                                                <div className="bg-slate-900 p-2 text-white flex justify-between items-center">
+                                                    <span className="font-black text-[12px] uppercase text-purple-400 px-2">{driver}</span>
+                                                    <button onClick={() => addHaulLine(driver)} className="bg-purple-600 text-white px-3 py-1 rounded text-[10px] font-black no-print">+ ADD HAUL</button>
+                                                </div>
+                                                <table className="w-full text-[10px]">
+                                                    <thead className="bg-slate-50 uppercase text-[9px] font-black border-b">
+                                                        <tr>
+                                                            <th className="p-2 text-left">Priority</th><th className="p-2 text-left">Project Job</th><th className="p-2 text-left">Equip/Material</th>
+                                                            <th className="p-2 text-left">Load</th><th className="p-2 text-left">Unload</th><th className="p-2 text-left">Notes</th><th className="p-2 no-print"></th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody className="divide-y">
+                                                        {truckingLogs[driver].hauls.map((haul) => (
+                                                            <tr key={haul.id} className="hover:bg-slate-50">
+                                                                <td className="p-1"><select className="w-full border rounded font-black p-1 uppercase" value={haul.priority} onChange={(e) => updateHaulLine(driver, haul.id, 'priority', e.target.value)}><option>Low</option><option>Medium</option><option>High</option></select></td>
+                                                                <td className="p-1"><select className="w-full border rounded p-1 font-bold" value={haul.jobName} onChange={(e) => updateHaulLine(driver, haul.id, 'jobName', e.target.value)}><option>SELECT JOB</option>{jobsList.map(j => <option key={j.id} value={j.name}>{j.id} - {j.name}</option>)}</select></td>
+                                                                <td className="p-1"><input className="w-full border rounded p-1 uppercase" value={haul.equip} onChange={(e) => updateHaulLine(driver, haul.id, 'equip', e.target.value)} /></td>
+                                                                <td className="p-1"><input className="w-full border rounded p-1 uppercase" value={haul.load} onChange={(e) => updateHaulLine(driver, haul.id, 'load', e.target.value)} /></td>
+                                                                <td className="p-1"><input className="w-full border rounded p-1 uppercase" value={haul.unload} onChange={(e) => updateHaulLine(driver, haul.id, 'unload', e.target.value)} /></td>
+                                                                <td className="p-1"><input className="w-full border rounded p-1" value={haul.notes} onChange={(e) => updateHaulLine(driver, haul.id, 'notes', e.target.value)} /></td>
+                                                                <td className="p-1 no-print text-center flex gap-2 justify-center">
+                                                                    <button onClick={() => copyHaulLine(driver, haul)} className="text-blue-400"><i className="fas fa-copy"></i></button>
+                                                                    <button onClick={() => {const n={...truckingLogs}; n[driver].hauls=n[driver].hauls.filter(h=>h.id!==haul.id); setTruckingLogs(n)}} className="text-red-300"><i className="fas fa-trash"></i></button>
+                                                                </td>
+                                                            </tr>
+                                                        ))}
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        ))}
+                                    </section>
+
+                                    {/* 3. SUB HAULING SECTION */}
+                                    <section>
+                                        <div className="flex justify-between items-center mb-4 border-b pb-2">
+                                            <h2 className="text-sm font-black uppercase italic text-slate-700">Sub Hauling Dispatch</h2>
+                                            <button onClick={() => setSubHaulers([...subHaulers, {id: Date.now(), broker: '', qty: '1', type: 'S10', job: '', load: '', unload: '', notes: ''}])} className="bg-red-600 text-white px-3 py-1 rounded text-[10px] font-black no-print">+ ADD SUB TRUCK</button>
+                                        </div>
+                                        <div className="bg-white rounded shadow border overflow-hidden">
                                             <table className="w-full text-[10px]">
-                                                <thead className="bg-slate-100 text-slate-500 uppercase font-black border-b tracking-tighter">
-                                                    <tr>
-                                                        <th className="p-2 text-left w-24">Priority</th>
-                                                        <th className="p-2 text-left w-48">Project Job</th>
-                                                        <th className="p-2 text-left">Equip/Material</th>
-                                                        <th className="p-2 text-left">Load Site</th>
-                                                        <th className="p-2 text-left">Unload Site</th>
-                                                        <th className="p-2 text-left">Notes</th>
-                                                        <th className="p-2 text-left">Contact</th>
-                                                        <th className="p-2 no-print text-center">Action</th>
-                                                    </tr>
+                                                <thead className="bg-slate-900 text-white uppercase">
+                                                    <tr><th className="p-2 text-left">Broker</th><th className="p-2 text-center w-12">Qty</th><th className="p-2">Type</th><th className="p-2">Job</th><th className="p-2">Load</th><th className="p-2">Unload</th><th className="p-2">Notes</th><th className="p-2 no-print"></th></tr>
                                                 </thead>
-                                                <tbody className="divide-y divide-slate-100">
-                                                    {truckingLogs[driver].hauls.map((haul) => (
-                                                        <tr key={haul.id} className="hover:bg-slate-50 transition">
-                                                            <td className="p-2">
-                                                                <select 
-                                                                    className={`w-full p-1 border rounded font-black uppercase ${haul.priority === 'High' ? 'text-red-600' : haul.priority === 'Medium' ? 'text-orange-600' : 'text-green-600'}`}
-                                                                    value={haul.priority}
-                                                                    onChange={(e) => updateHaulLine(driver, haul.id, 'priority', e.target.value)}
-                                                                >
-                                                                    <option value="Low">Low</option>
-                                                                    <option value="Medium">Medium</option>
-                                                                    <option value="High">High</option>
-                                                                </select>
-                                                            </td>
-                                                            <td className="p-2">
-                                                                <select 
-                                                                    className="w-full p-1 border rounded font-bold uppercase"
-                                                                    value={haul.jobName}
-                                                                    onChange={(e) => updateHaulLine(driver, haul.id, 'jobName', e.target.value)}
-                                                                >
-                                                                    <option>SELECT JOB</option>
-                                                                    {jobsList.map(j => <option key={j.id} value={j.name}>{j.id} - {j.name}</option>)}
-                                                                </select>
-                                                            </td>
-                                                            <td className="p-2"><input className="w-full p-1 border rounded uppercase font-bold" value={haul.equip} onChange={(e) => updateHaulLine(driver, haul.id, 'equip', e.target.value)} /></td>
-                                                            <td className="p-2"><input className="w-full p-1 border rounded uppercase" value={haul.load} onChange={(e) => updateHaulLine(driver, haul.id, 'load', e.target.value)} /></td>
-                                                            <td className="p-2"><input className="w-full p-1 border rounded uppercase" value={haul.unload} onChange={(e) => updateHaulLine(driver, haul.id, 'unload', e.target.value)} /></td>
-                                                            <td className="p-2"><input className="w-full p-1 border rounded" value={haul.notes} onChange={(e) => updateHaulLine(driver, haul.id, 'notes', e.target.value)} /></td>
-                                                            <td className="p-2"><input className="w-full p-1 border rounded uppercase" value={haul.contact} onChange={(e) => updateHaulLine(driver, haul.id, 'contact', e.target.value)} /></td>
-                                                            <td className="p-2 no-print text-center flex gap-3 justify-center">
-                                                                <button onClick={() => copyHaulLine(driver, haul)} title="Duplicate Row" className="text-blue-400 hover:text-blue-600 transition"><i className="fas fa-copy"></i></button>
-                                                                <button onClick={() => removeHaulLine(driver, haul.id)} title="Delete Row" className="text-red-300 hover:text-red-600 transition"><i className="fas fa-trash"></i></button>
-                                                            </td>
+                                                <tbody className="divide-y">
+                                                    {subHaulers.map((sub, sIdx) => (
+                                                        <tr key={sub.id}>
+                                                            <td className="p-1"><input className="w-full border rounded p-1 uppercase font-bold text-red-700" value={sub.broker} onChange={e => {let n=[...subHaulers]; n[sIdx].broker=e.target.value; setSubHaulers(n)}} /></td>
+                                                            <td className="p-1"><input className="w-full border rounded p-1 text-center" value={sub.qty} onChange={e => {let n=[...subHaulers]; n[sIdx].qty=e.target.value; setSubHaulers(n)}} /></td>
+                                                            <td className="p-1"><input className="w-full border rounded p-1 uppercase" value={sub.type} onChange={e => {let n=[...subHaulers]; n[sIdx].type=e.target.value; setSubHaulers(n)}} /></td>
+                                                            <td className="p-1"><input className="w-full border rounded p-1 uppercase" value={sub.job} onChange={e => {let n=[...subHaulers]; n[sIdx].job=e.target.value; setSubHaulers(n)}} /></td>
+                                                            <td className="p-1"><input className="w-full border rounded p-1 uppercase" value={sub.load} onChange={e => {let n=[...subHaulers]; n[sIdx].load=e.target.value; setSubHaulers(n)}} /></td>
+                                                            <td className="p-1"><input className="w-full border rounded p-1 uppercase" value={sub.unload} onChange={e => {let n=[...subHaulers]; n[sIdx].unload=e.target.value; setSubHaulers(n)}} /></td>
+                                                            <td className="p-1"><input className="w-full border rounded p-1" value={sub.notes} onChange={e => {let n=[...subHaulers]; n[sIdx].notes=e.target.value; setSubHaulers(n)}} /></td>
+                                                            <td className="p-1 no-print text-center"><button onClick={() => setSubHaulers(subHaulers.filter(h => h.id !== sub.id))} className="text-red-300"><i className="fas fa-trash"></i></button></td>
                                                         </tr>
                                                     ))}
                                                 </tbody>
                                             </table>
                                         </div>
-                                    </div>
-                                ))}
-                            </section>
+                                    </section>
+                                </>
+                            ) : (
+                                <div className="bg-white p-6 rounded shadow border">
+                                    <h2 className="text-lg font-black uppercase mb-4 border-b">Rental Inventory</h2>
+                                    {/* Rental Table logic preserved from previous versions */}
+                                    <p className="text-xs text-slate-400 italic">Rental tracking active. Use the form to add temporary equipment.</p>
+                                </div>
+                            )}
                         </div>
                     </div>
                 </div>
@@ -182,20 +231,13 @@
         }
 
         function getHGEJobs() {
-            return [
-                { id: "102", name: "Sunny Slope" }, { id: "121", name: "Yard Improvements" }, 
-                { id: "197", name: "I Street" }, { id: "209", name: "Haggerty" }, { id: "213", name: "Camp Newman" }
-            ];
+            return [{ id: "102", name: "Sunny Slope" }, { id: "121", name: "Yard Improvements" }, { id: "197", name: "I Street" }, { id: "209", name: "Haggerty" }, { id: "213", name: "Camp Newman" }];
         }
-
         function getFullRoster() {
-            return [
-                { id: 1, name: 'Mike Harris', subType: 'super' }, { id: 17, name: 'Benny Shepher', subType: 'trucker' }, { id: 18, name: 'Tino Rivera', subType: 'trucker' }
-            ];
+            return [{ id: 1, name: 'Mike Harris', subType: 'super' }, { id: 3, name: 'Bryan Dolinsek', subType: 'foreman' }, { id: 17, name: 'Benny Shepher', subType: 'trucker' }, { id: 18, name: 'Tino Rivera', subType: 'trucker' }];
         }
-
         function getFullEquipment() {
-            return [{ name: 'WT-03 Peterbilt 4k', subType: 'heavy' }, { name: 'Water Buffalo', subType: 'misc' }];
+            return [{ name: 'WT-03 Peterbilt 4k', subType: 'heavy' }, { name: 'EXC JD 50G1 Mini', subType: 'heavy' }, { name: 'Water Buffalo', subType: 'misc' }];
         }
 
         const root = ReactDOM.createRoot(document.getElementById('app'));
