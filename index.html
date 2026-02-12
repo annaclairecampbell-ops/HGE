@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>HGE Dispatch v11.3 - Complete Fleet & Communications</title>
+    <title>HGE Dispatch v11.4 - Organized Blocks</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -16,19 +16,14 @@
         .drop-zone { min-height: 160px; transition: all 0.2s; border-radius: 12px; border: 2px solid #e2e8f0; background-color: #f8fafc; }
         .drop-zone.drag-over { background-color: #fff7ed; border-color: #f97316; border-style: dashed; }
         
-        .bg-super { background: linear-gradient(135deg, #1e40af 0%, #3b82f6 100%); color: white; }
-        .bg-foreman { background: linear-gradient(135deg, #166534 0%, #22c55e 100%); color: white; }
-        .bg-operator { background: linear-gradient(135deg, #854d0e 0%, #eab308 100%); color: white; }
-        .bg-trucker { background: linear-gradient(135deg, #6b21a8 0%, #a855f7 100%); color: white; }
-        .bg-labor { background: linear-gradient(135deg, #9a3412 0%, #f97316 100%); color: white; }
-        .bg-lead { background: linear-gradient(135deg, #155e75 0%, #06b6d4 100%); color: white; }
-        .bg-shop { background: linear-gradient(135deg, #57534e 0%, #78716c 100%); color: white; }
-        .bg-heavy-eq { background: linear-gradient(135deg, #0f172a 0%, #334155 100%); color: white; }
-        .bg-misc-eq { background: linear-gradient(135deg, #713f12 0%, #a16207 100%); color: white; }
-        .bg-rental { background: linear-gradient(135deg, #4338ca 0%, #6366f1 100%); color: white; }
+        /* Gradients */
+        .bg-super { background: linear-gradient(135deg, #1e40af, #3b82f6); color: white; }
+        .bg-foreman { background: linear-gradient(135deg, #166534, #22c55e); color: white; }
+        .bg-heavy { background: linear-gradient(135deg, #0f172a, #334155); color: white; }
+        .bg-rental { background: linear-gradient(135deg, #4338ca, #6366f1); color: white; }
+        .bg-misc { background: linear-gradient(135deg, #713f12, #a16207); color: white; }
         
-        .in-use-red { background: #fecaca !important; border: 2px solid #ef4444 !important; color: #b91c1c !important; opacity: 0.9; cursor: not-allowed; }
-        .tab-active { border-bottom: 4px solid #1e40af; color: #1e40af; }
+        .in-use { opacity: 0.25; grayscale: 100%; pointer-events: none; border: 1px dashed #cbd5e1 !important; }
         @media print { .no-print { display: none; } }
     </style>
 </head>
@@ -43,32 +38,32 @@
             const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
             const [draggedItem, setDraggedItem] = useState(null);
 
-            // Master Data Functions
-            const employees = getDefaultEmployees();
-            const ownedEquipment = getHGEEquipment();
-            const jobsList = getHGEJobs();
-
-            const [assignments, setAssignments] = useState(() => JSON.parse(localStorage.getItem('hge_assign_v11')) || []);
+            // Data state
+            const [assignments, setAssignments] = useState(() => JSON.parse(localStorage.getItem('hge_asgn_v11')) || []);
             const [activeRowJobs, setActiveRowJobs] = useState(() => JSON.parse(localStorage.getItem('hge_rows_v11')) || [{jobName: 'SELECT JOB', scope: '', startTime: '07:00'}]);
             const [rentals, setRentals] = useState(() => JSON.parse(localStorage.getItem('hge_rentals_v11')) || []);
 
             useEffect(() => {
-                localStorage.setItem('hge_assign_v11', JSON.stringify(assignments));
+                localStorage.setItem('hge_asgn_v11', JSON.stringify(assignments));
                 localStorage.setItem('hge_rows_v11', JSON.stringify(activeRowJobs));
                 localStorage.setItem('hge_rentals_v11', JSON.stringify(rentals));
             }, [assignments, activeRowJobs, rentals]);
 
+            const employees = getDefaultEmployees();
+            const equipment = getHGEEquipment();
+            const jobsList = getHGEJobs();
+
             const isItemAssigned = (name) => assignments.some(a => a.date === selectedDate && a.name === name);
 
             const handleDrop = (rowIndex) => {
-                if (!draggedItem || isItemAssigned(draggedItem.name)) return;
+                if (!draggedItem) return;
                 const newAssign = {
                     id: Date.now(),
                     date: selectedDate,
                     rowIndex: rowIndex,
                     name: draggedItem.name,
-                    category: draggedItem.category,
-                    subType: draggedItem.subType || '',
+                    category: draggedItem.category, // 'people' or 'equip'
+                    subType: draggedItem.subType,
                     note: ''
                 };
                 setAssignments([...assignments, newAssign]);
@@ -78,281 +73,200 @@
             const sendDispatch = (rowIndex, type) => {
                 const job = activeRowJobs[rowIndex];
                 const crew = assignments.filter(a => a.date === selectedDate && a.rowIndex === rowIndex);
-                if (job.jobName === 'SELECT JOB') { alert("Please select a job first."); return; }
-
-                const crewList = crew.map(c => `- ${c.name} (${c.note || 'No notes'})`).join('\n');
-                const messageBody = `HGE DISPATCH - ${selectedDate}\n\nJOB: ${job.jobName}\nSTART: ${job.startTime}\nSCOPE: ${job.scope}\n\nCREW/EQUIPMENT:\n${crewList}`;
-
+                const people = crew.filter(c => c.category === 'people').map(p => p.name).join(', ');
+                const gear = crew.filter(c => c.category === 'equip').map(g => g.name).join(', ');
+                
+                const message = `HGE DISPATCH: ${job.jobName}\nStart: ${job.startTime}\nCrew: ${people}\nEquipment: ${gear}`;
+                
                 if (type === 'email') {
-                    const recipientEmails = crew.map(c => employees.find(e => e.name === c.name)?.email).filter(e => e && e !== '').join(',');
-                    window.location.href = `mailto:${recipientEmails}?subject=HGE Dispatch: ${job.jobName}&body=${encodeURIComponent(messageBody)}`;
+                    window.location.href = `mailto:?subject=Dispatch ${job.jobName}&body=${encodeURIComponent(message)}`;
                 } else {
-                    const recipientPhones = crew.map(c => employees.find(e => e.name === c.name)?.phone).filter(p => p && p !== '').join(',');
-                    window.location.href = `sms:${recipientPhones}?body=${encodeURIComponent(messageBody)}`;
+                    window.location.href = `sms:?body=${encodeURIComponent(message)}`;
                 }
-            };
-
-            const getBadgeClass = (item) => {
-                if (isItemAssigned(item.name)) return 'in-use-red';
-                switch(item.subType) {
-                    case 'super': return 'bg-super';
-                    case 'foreman': return 'bg-foreman';
-                    case 'operator': return 'bg-operator';
-                    case 'trucker': return 'bg-trucker';
-                    case 'labor': return 'bg-labor';
-                    case 'lead': return 'bg-lead';
-                    case 'shop': return 'bg-shop';
-                    case 'heavy': return 'bg-heavy-eq';
-                    case 'misc': return 'bg-misc-eq';
-                    case 'rental': return 'bg-rental';
-                    default: return 'bg-slate-500';
-                }
-            };
-
-            const addRental = (e) => {
-                e.preventDefault();
-                const formData = new FormData(e.target);
-                const newRental = {
-                    id: 'rent-' + Date.now(),
-                    name: formData.get('name'),
-                    vendor: formData.get('vendor'),
-                    startDate: formData.get('startDate'),
-                    status: 'Active',
-                    subType: 'rental'
-                };
-                setRentals([...rentals, newRental]);
-                e.target.reset();
             };
 
             return (
-                <div className="min-h-screen flex flex-col font-sans">
-                    <header className="bg-slate-900 text-white p-4 shadow-xl flex justify-between items-center no-print">
-                        <div className="flex items-center gap-3">
-                            <i className="fas fa-project-diagram text-orange-500 text-2xl"></i>
-                            <h1 className="text-xl font-black tracking-tighter uppercase italic">HGE Operations</h1>
-                        </div>
+                <div className="min-h-screen flex flex-col">
+                    <header className="bg-slate-900 text-white p-4 flex justify-between items-center no-print">
+                        <h1 className="text-xl font-black italic uppercase tracking-tighter text-orange-500">HGE Operations v11.4</h1>
                         <div className="flex gap-2">
-                             <button onClick={() => setActiveRowJobs([...activeRowJobs, {jobName: 'SELECT JOB', scope: '', startTime: '07:00'}])} className="bg-orange-600 px-3 py-1 rounded text-[10px] font-bold uppercase">+ Add Job Row</button>
-                             <button onClick={() => window.print()} className="bg-slate-700 px-3 py-1 rounded text-[10px] font-bold uppercase">Print</button>
+                            <button onClick={() => setActiveRowJobs([...activeRowJobs, {jobName: 'SELECT JOB', scope: '', startTime: '07:00'}])} className="bg-orange-600 px-3 py-1 rounded text-[10px] font-bold">+ ADD JOB ROW</button>
+                            <button onClick={() => window.print()} className="bg-slate-700 px-3 py-1 rounded text-[10px] font-bold">PRINT</button>
                         </div>
                     </header>
 
-                    <nav className="bg-white border-b flex justify-center sticky top-0 z-50 shadow-sm no-print">
+                    <nav className="bg-white border-b flex justify-center no-print">
                         {['schedule', 'rentals', 'directory'].map(t => (
-                            <button key={t} onClick={() => setActiveTab(t)} 
-                                className={`px-6 py-4 font-bold uppercase text-[10px] tracking-widest ${activeTab === t ? 'tab-active' : 'text-slate-400'}`}>
-                                {t}
-                            </button>
+                            <button key={t} onClick={() => setActiveTab(t)} className={`px-6 py-4 font-bold uppercase text-[10px] tracking-widest ${activeTab === t ? 'border-b-4 border-blue-600 text-blue-600' : 'text-slate-400'}`}>{t}</button>
                         ))}
                     </nav>
 
-                    <main className="p-4 md:p-8 container mx-auto">
-                        {activeTab === 'schedule' ? (
-                            <div className="flex flex-col lg:flex-row gap-8">
-                                <div className="w-full lg:w-1/4 no-print h-[80vh] overflow-y-auto space-y-6 bg-white p-4 rounded-xl shadow-sm border">
-                                    <input type="date" value={selectedDate} onChange={e => setSelectedDate(e.target.value)} className="w-full p-2 border rounded font-bold mb-4" />
+                    <main className="p-4 flex flex-col lg:flex-row gap-6">
+                        {activeTab === 'schedule' && (
+                            <>
+                                {/* Sidebar */}
+                                <div className="w-full lg:w-1/4 no-print space-y-4">
+                                    <input type="date" value={selectedDate} onChange={e => setSelectedDate(e.target.value)} className="w-full p-2 border rounded font-bold" />
                                     
-                                    <section>
-                                        <h3 className="text-[10px] font-black uppercase text-slate-500 mb-2 italic border-b">Personnel</h3>
+                                    <div className="bg-white p-3 rounded shadow-sm border h-[70vh] overflow-y-auto">
+                                        <h3 className="text-[10px] font-bold uppercase text-slate-400 mb-2 border-b">Personnel</h3>
                                         {employees.map(e => (
-                                            <div key={e.id} draggable={!isItemAssigned(e.name)} onDragStart={() => setDraggedItem({...e, category: 'crew'})}
-                                                className={`p-2 mb-1 rounded text-[10px] font-bold shadow-sm draggable uppercase ${getBadgeClass(e)}`}>
-                                                {e.name} <span className="opacity-60 float-right">{e.code}</span>
-                                            </div>
+                                            <div key={e.id} draggable onDragStart={() => setDraggedItem({...e, category: 'people'})} className={`p-2 mb-1 rounded text-[10px] font-bold shadow-sm draggable bg-${e.subType} ${isItemAssigned(e.name) ? 'in-use' : ''}`}>{e.name}</div>
                                         ))}
-                                    </section>
+                                        
+                                        <h3 className="text-[10px] font-bold uppercase text-slate-400 mt-4 mb-2 border-b">Fleet & Tools</h3>
+                                        {equipment.map((eq, i) => (
+                                            <div key={i} draggable onDragStart={() => setDraggedItem({...eq, category: 'equip'})} className={`p-2 mb-1 rounded text-[10px] font-bold shadow-sm draggable bg-${eq.subType} ${isItemAssigned(eq.name) ? 'in-use' : ''}`}>{eq.name}</div>
+                                        ))}
 
-                                    <section>
-                                        <h3 className="text-[10px] font-black uppercase text-indigo-600 mb-2 italic border-b">Active Rentals</h3>
+                                        <h3 className="text-[10px] font-bold uppercase text-indigo-600 mt-4 mb-2 border-b">Rentals</h3>
                                         {rentals.filter(r => r.status === 'Active').map(r => (
-                                            <div key={r.id} draggable={!isItemAssigned(r.name)} onDragStart={() => setDraggedItem({...r, category: 'rental'})}
-                                                className={`p-2 mb-1 rounded text-[10px] font-bold shadow-sm draggable uppercase ${getBadgeClass(r)}`}>
-                                                {r.name} <span className="opacity-60 float-right">{r.vendor}</span>
-                                            </div>
+                                            <div key={r.id} draggable onDragStart={() => setDraggedItem({...r, category: 'equip'})} className={`p-2 mb-1 rounded text-[10px] font-bold shadow-sm draggable bg-rental ${isItemAssigned(r.name) ? 'in-use' : ''}`}>{r.name}</div>
                                         ))}
-                                    </section>
-
-                                    <section>
-                                        <h3 className="text-[10px] font-black uppercase text-slate-500 mb-2 italic border-b">Fleet & Tools</h3>
-                                        {ownedEquipment.map(eq => (
-                                            <div key={eq.id} draggable={!isItemAssigned(eq.name)} onDragStart={() => setDraggedItem({...eq, category: 'equip'})}
-                                                className={`p-2 mb-1 rounded text-[10px] font-bold shadow-sm draggable uppercase ${getBadgeClass(eq)}`}>
-                                                {eq.name}
-                                            </div>
-                                        ))}
-                                    </section>
+                                    </div>
                                 </div>
 
-                                <div className="w-full lg:w-3/4 space-y-6">
-                                    {activeRowJobs.map((row, idx) => (
-                                        <div key={idx} onDragOver={e => e.preventDefault()} onDrop={() => handleDrop(idx)} className="bg-white rounded-xl shadow-md border-2 border-slate-200 overflow-hidden drop-zone">
-                                            <div className="bg-slate-900 p-3 flex flex-wrap gap-4 items-center">
-                                                <select value={row.jobName} onChange={(e) => {
-                                                    const copy = [...activeRowJobs];
-                                                    copy[idx].jobName = e.target.value;
-                                                    setActiveRowJobs(copy);
-                                                }} className="bg-slate-800 text-yellow-400 font-bold text-xs p-2 rounded border-none w-full md:w-auto uppercase">
-                                                    <option>SELECT JOB</option>
-                                                    {jobsList.map(j => <option key={j.id} value={j.name}>{j.id} - {j.name}</option>)}
-                                                </select>
-                                                <input type="time" value={row.startTime} onChange={(e) => {
-                                                    const copy = [...activeRowJobs];
-                                                    copy[idx].startTime = e.target.value;
-                                                    setActiveRowJobs(copy);
-                                                }} className="bg-slate-800 p-1 rounded text-xs border-none text-white" />
-                                                <input type="text" placeholder="Scope..." value={row.scope} 
-                                                    onChange={(e) => {
-                                                        const copy = [...activeRowJobs];
-                                                        copy[idx].scope = e.target.value;
-                                                        setActiveRowJobs(copy);
-                                                    }} className="bg-slate-800 flex-1 p-2 rounded text-xs text-slate-200 border-none" />
-                                                
-                                                <div className="flex gap-4 border-l border-slate-700 pl-4">
-                                                    <button title="Email Crew" onClick={() => sendDispatch(idx, 'email')} className="text-blue-400 hover:text-white"><i className="fas fa-envelope"></i></button>
-                                                    <button title="Text Crew" onClick={() => sendDispatch(idx, 'sms')} className="text-green-400 hover:text-white"><i className="fas fa-comment-sms"></i></button>
-                                                    <button onClick={() => setActiveRowJobs(activeRowJobs.filter((_, i) => i !== idx))} className="text-slate-500 hover:text-red-500"><i className="fas fa-trash"></i></button>
+                                {/* Board */}
+                                <div className="flex-1 space-y-4">
+                                    {activeRowJobs.map((row, idx) => {
+                                        const jobCrew = assignments.filter(a => a.date === selectedDate && a.rowIndex === idx);
+                                        const peopleAssigns = jobCrew.filter(a => a.category === 'people');
+                                        const equipAssigns = jobCrew.filter(a => a.category === 'equip');
+
+                                        return (
+                                            <div key={idx} onDragOver={e => e.preventDefault()} onDrop={() => handleDrop(idx)} className="bg-white rounded-xl shadow border-2 border-slate-200 overflow-hidden drop-zone">
+                                                <div className="bg-slate-900 p-3 flex items-center gap-4">
+                                                    <select value={row.jobName} onChange={e => {const n=[...activeRowJobs]; n[idx].jobName=e.target.value; setActiveRowJobs(n)}} className="bg-slate-800 text-yellow-400 font-bold text-xs p-1 rounded border-none uppercase">
+                                                        <option>SELECT JOB</option>
+                                                        {jobsList.map(j => <option key={j.id} value={j.name}>{j.id} - {j.name}</option>)}
+                                                    </select>
+                                                    <input type="time" value={row.startTime} onChange={e => {const n=[...activeRowJobs]; n[idx].startTime=e.target.value; setActiveRowJobs(n)}} className="bg-slate-800 text-white text-xs p-1 rounded border-none" />
+                                                    <input type="text" placeholder="Scope..." value={row.scope} onChange={e => {const n=[...activeRowJobs]; n[idx].scope=e.target.value; setActiveRowJobs(n)}} className="bg-slate-800 text-slate-300 text-xs p-1 rounded border-none flex-1" />
+                                                    
+                                                    <div className="flex gap-3 text-slate-500">
+                                                        <i onClick={() => sendDispatch(idx, 'email')} className="fas fa-envelope hover:text-blue-400 cursor-pointer"></i>
+                                                        <i onClick={() => sendDispatch(idx, 'sms')} className="fas fa-comment-sms hover:text-green-400 cursor-pointer"></i>
+                                                        <i onClick={() => setActiveRowJobs(activeRowJobs.filter((_, i) => i !== idx))} className="fas fa-trash hover:text-red-500 cursor-pointer"></i>
+                                                    </div>
+                                                </div>
+
+                                                <div className="p-3">
+                                                    {/* PEOPLE SECTION */}
+                                                    <div className="mb-4">
+                                                        <span className="text-[9px] font-black uppercase text-slate-400 tracking-widest block mb-2 px-1">Manpower</span>
+                                                        <div className="flex flex-wrap gap-2 min-h-[30px]">
+                                                            {peopleAssigns.map(a => (
+                                                                <div key={a.id} className={`p-2 rounded shadow-sm flex items-center gap-2 bg-${a.subType} min-w-[120px]`}>
+                                                                    <span className="text-[10px] font-bold uppercase flex-1">{a.name}</span>
+                                                                    <i onClick={() => setAssignments(assignments.filter(x => x.id !== a.id))} className="fas fa-times opacity-50 hover:opacity-100 cursor-pointer text-[10px]"></i>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+
+                                                    {/* DIVIDER */}
+                                                    <div className="border-t border-slate-100 my-2 relative">
+                                                        <span className="absolute -top-2 right-4 bg-white px-2 text-[8px] font-bold text-slate-300 uppercase">Equipment Assets</span>
+                                                    </div>
+
+                                                    {/* EQUIPMENT SECTION */}
+                                                    <div className="mt-4">
+                                                        <div className="flex flex-wrap gap-2 min-h-[30px]">
+                                                            {equipAssigns.map(a => (
+                                                                <div key={a.id} className={`p-2 rounded shadow-sm flex items-center gap-2 bg-${a.subType === 'rental' ? 'rental' : 'heavy'} min-w-[120px]`}>
+                                                                    <span className="text-[10px] font-bold uppercase flex-1 italic">{a.name}</span>
+                                                                    <i onClick={() => setAssignments(assignments.filter(x => x.id !== a.id))} className="fas fa-times opacity-50 hover:opacity-100 cursor-pointer text-[10px]"></i>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    </div>
                                                 </div>
                                             </div>
-                                            <div className="p-4 flex flex-wrap gap-2">
-                                                {assignments.filter(a => a.date === selectedDate && a.rowIndex === idx).map(a => (
-                                                    <div key={a.id} className={`p-3 rounded-lg shadow min-w-[140px] ${getBadgeClass(a)}`}>
-                                                        <div className="flex justify-between items-center mb-1">
-                                                            <p className="text-[10px] font-black uppercase">{a.name}</p>
-                                                            <button onClick={() => setAssignments(assignments.filter(x => x.id !== a.id))} className="text-white/50"><i className="fas fa-times"></i></button>
-                                                        </div>
-                                                        <input type="text" placeholder="Note..." value={a.note} onChange={(e) => setAssignments(assignments.map(item => item.id === a.id ? {...item, note: e.target.value} : item))}
-                                                            className="w-full bg-black/20 rounded px-1 py-1 text-[9px] text-white border-none placeholder-white/40" />
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        </div>
-                                    ))}
+                                        );
+                                    })}
                                 </div>
-                            </div>
-                        ) : activeTab === 'rentals' ? (
-                            <div className="space-y-6">
-                                <form onSubmit={addRental} className="bg-white p-6 rounded-xl shadow border grid grid-cols-1 md:grid-cols-4 gap-4 items-end no-print">
-                                    <div><label className="text-[10px] font-bold uppercase">Equipment Name</label><input name="name" required className="w-full p-2 border rounded text-xs uppercase" /></div>
-                                    <div><label className="text-[10px] font-bold uppercase">Vendor (Sunbelt/Aaction)</label><input name="vendor" required className="w-full p-2 border rounded text-xs uppercase" /></div>
-                                    <div><label className="text-[10px] font-bold uppercase">Start Date</label><input name="startDate" type="date" required className="w-full p-2 border rounded text-xs" /></div>
-                                    <button type="submit" className="bg-indigo-600 text-white p-2 rounded font-bold text-xs uppercase hover:bg-indigo-500">Add to Sidebar</button>
+                            </>
+                        )}
+
+                        {activeTab === 'rentals' && (
+                            <div className="w-full bg-white p-6 rounded shadow border">
+                                <h2 className="font-bold mb-4">Add Third-Party Rental</h2>
+                                <form onSubmit={(e) => {
+                                    e.preventDefault();
+                                    const fd = new FormData(e.target);
+                                    setRentals([...rentals, { id: Date.now(), name: fd.get('n'), vendor: fd.get('v'), status: 'Active', subType: 'rental' }]);
+                                    e.target.reset();
+                                }} className="flex gap-4 mb-8">
+                                    <input name="n" placeholder="Equipment Name" className="border p-2 rounded text-sm flex-1" required />
+                                    <input name="v" placeholder="Vendor (Aaction/Sunbelt)" className="border p-2 rounded text-sm flex-1" required />
+                                    <button type="submit" className="bg-blue-600 text-white px-4 py-2 rounded font-bold text-sm">ADD RENTAL</button>
                                 </form>
-                                <div className="bg-white rounded-xl shadow border overflow-hidden">
-                                    <table className="w-full text-left text-xs">
-                                        <thead className="bg-slate-900 text-white uppercase text-[10px]">
-                                            <tr><th className="p-4">Equipment</th><th className="p-4">Vendor</th><th className="p-4">Status</th><th className="p-4">Actions</th></tr>
-                                        </thead>
-                                        <tbody className="divide-y">
-                                            {rentals.map(r => (
-                                                <tr key={r.id} className={r.status === 'Returned' ? 'opacity-50' : ''}>
-                                                    <td className="p-4 font-bold uppercase">{r.name}</td>
-                                                    <td className="p-4">{r.vendor}</td>
-                                                    <td className="p-4 italic">{r.status}</td>
-                                                    <td className="p-4">
-                                                        {r.status === 'Active' ? 
-                                                            <button onClick={() => setRentals(rentals.map(x => x.id === r.id ? {...x, status: 'Returned'} : x))} className="text-red-500 font-bold uppercase text-[10px]">Mark Returned</button> :
-                                                            <button onClick={() => setRentals(rentals.filter(x => x.id !== r.id))} className="text-slate-400 uppercase text-[10px]">Delete Record</button>
-                                                        }
-                                                    </td>
-                                                </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
-                                </div>
-                            </div>
-                        ) : activeTab === 'directory' ? (
-                            <div className="bg-white rounded-xl shadow border overflow-hidden">
-                                <table className="w-full text-left text-xs">
-                                    <thead className="bg-slate-900 text-white uppercase">
-                                        <tr><th className="p-4">Name</th><th className="p-4">Role</th><th className="p-4">Email</th><th className="p-4">Phone</th></tr>
-                                    </thead>
+                                <table className="w-full text-left text-sm">
+                                    <thead className="bg-slate-100 uppercase text-[10px]"><tr><th className="p-3">Asset</th><th className="p-3">Vendor</th><th className="p-3">Status</th></tr></thead>
                                     <tbody className="divide-y">
-                                        {employees.map(e => (
-                                            <tr key={e.id}>
-                                                <td className="p-4 font-bold uppercase">{e.name}</td>
-                                                <td className="p-4 text-slate-400 uppercase">{e.subType}</td>
-                                                <td className="p-4">{e.email || '---'}</td>
-                                                <td className="p-4">{e.phone || '---'}</td>
+                                        {rentals.map(r => (
+                                            <tr key={r.id}>
+                                                <td className="p-3 font-bold uppercase">{r.name}</td>
+                                                <td className="p-3">{r.vendor}</td>
+                                                <td className="p-3"><button onClick={() => setRentals(rentals.map(x => x.id === r.id ? {...x, status: x.status === 'Active' ? 'Returned' : 'Active'} : x))} className={`px-2 py-1 rounded text-[10px] font-bold ${r.status==='Active'?'bg-green-100 text-green-700':'bg-slate-100 text-slate-400'}`}>{r.status}</button></td>
                                             </tr>
                                         ))}
                                     </tbody>
                                 </table>
                             </div>
-                        ) : null}
+                        )}
                     </main>
                 </div>
             );
         }
 
-        function getHGEJobs() { 
+        // Master Data
+        function getDefaultEmployees() {
             return [
-                { id: "102", name: "Seth Nobman Sunny Slope" }, 
-                { id: "121", name: "Yard Improvements" }, 
-                { id: "197", name: "I Street" }, 
-                { id: "209", name: "Haggerty 3950 I St" }, 
-                { id: "213", name: "Camp Newman Phase 4" }
-            ]; 
+                { id: 1, name: 'Mike Harris', subType: 'super', email: '', phone: '' },
+                { id: 2, name: 'Michael Burchfield', subType: 'super', email: '', phone: '' },
+                { id: 3, name: 'Bryan Dolinsek', subType: 'foreman', email: '', phone: '' },
+                { id: 4, name: 'Dominic Amantite', subType: 'foreman', email: '', phone: '' },
+                { id: 5, name: 'Dylan Weese', subType: 'foreman', email: '', phone: '' },
+                { id: 6, name: 'Martin Lopez', subType: 'foreman', email: '', phone: '' },
+                { id: 7, name: 'Ruben Flores', subType: 'foreman', email: '', phone: '' },
+                { id: 8, name: 'Jose Reyes', subType: 'foreman', email: '', phone: '' }, // Lead
+                { id: 9, name: 'Christopher West', subType: 'operator', email: '', phone: '' },
+                { id: 10, name: 'Calvin Young', subType: 'operator', email: '', phone: '' },
+                { id: 11, name: 'Isaias Camacho', subType: 'operator', email: '', phone: '' },
+                { id: 12, name: 'Marcelo Perez', subType: 'operator', email: '', phone: '' },
+                { id: 13, name: 'Roy Segundo', subType: 'operator', email: '', phone: '' },
+                { id: 14, name: 'Blake Hartlieb', subType: 'operator', email: '', phone: '' },
+                { id: 15, name: 'Dillon Giacomini', subType: 'operator', email: '', phone: '' },
+                { id: 16, name: 'Sage Gugel', subType: 'operator', email: '', phone: '' },
+                { id: 17, name: 'Benny Shepher', subType: 'trucker', email: '', phone: '' },
+                { id: 18, name: 'Tino Rivera', subType: 'trucker', email: '', phone: '' },
+                { id: 19, name: 'Austin Matsler', subType: 'labor', email: '', phone: '' },
+                { id: 20, name: 'Clayton Setiak', subType: 'labor', email: '', phone: '' },
+                { id: 21, name: 'Jaime Gonzalez', subType: 'labor', email: '', phone: '' },
+                { id: 22, name: 'Nikolaos Patridis', subType: 'super', email: '', phone: '' }, // Shop
+                { id: 23, name: 'Anthony Giamonna', subType: 'labor', email: '', phone: '' }
+            ];
         }
 
-        function getHGEEquipment() { 
+        function getHGEEquipment() {
             return [
-                // WATER TRUCKS
-                { id: 'wt1', name: 'WT-03 3-Axle Peterbilt', subType: 'heavy' },
-                { id: 'wt2', name: 'WT-05 2-Axle Peterbilt', subType: 'heavy' },
-                { id: 'wt3', name: 'WT-06 2-Axle Freightliner', subType: 'heavy' },
-                { id: 'bt1', name: 'BT-01 Ford N8000', subType: 'heavy' },
-                { id: 'bt2', name: 'BT-03 Freightliner', subType: 'heavy' },
-                // EXCAVATORS & DOZERS
-                { id: 'ex1', name: 'EXC JD 50G1 Mini', subType: 'heavy' },
-                { id: 'ex2', name: 'EXC JD 50G2 Mini', subType: 'heavy' },
-                { id: 'ex3', name: 'EXC JD 50G3 Mini', subType: 'heavy' },
-                { id: 'ex4', name: 'EXC JD 85G1', subType: 'heavy' },
-                { id: 'ex5', name: 'EXC JD 135G1', subType: 'heavy' },
-                { id: 'ex6', name: 'EXC JD 135G2', subType: 'heavy' },
-                { id: 'ex7', name: 'EXC JD 245G1', subType: 'heavy' },
-                { id: 'dz1', name: 'DOZ JD 700K', subType: 'heavy' },
-                { id: 'sk1', name: 'JD 210LE1 Skip', subType: 'heavy' },
-                // TRUCKS
-                { id: 'fb1', name: 'FB-01 Flatbed F550', subType: 'heavy' },
-                { id: 'tr1', name: 'EQ-01 Trailer', subType: 'heavy' },
-                { id: 'tr2', name: 'EQ-02 Trailer', subType: 'heavy' },
-                // TOOLS
-                { id: 'wc1', name: 'Wacker 1', subType: 'misc' },
-                { id: 'wc2', name: 'Wacker 2', subType: 'misc' },
-                { id: 'kb1', name: 'Kick Broom', subType: 'misc' }
-            ]; 
+                { name: 'WT-03 Peterbilt 4k', subType: 'heavy' },
+                { name: 'WT-05 Peterbilt 2k', subType: 'heavy' },
+                { name: 'EXC JD 50G1 Mini', subType: 'heavy' },
+                { name: 'EXC JD 85G1', subType: 'heavy' },
+                { name: 'DOZ JD 700K', subType: 'heavy' },
+                { name: 'Wacker 1', subType: 'misc' },
+                { name: 'Kick Broom', subType: 'misc' }
+            ];
         }
 
-        function getDefaultEmployees() { 
-            return [
-                { id: 1, name: 'Mike Harris', code: 'Super 0', subType: 'super', email: '', phone: '' },
-                { id: 2, name: 'Michael Burchfield', code: 'Super 1', subType: 'super', email: '', phone: '' },
-                { id: 3, name: 'Bryan Dolinsek', code: 'Foreman 1', subType: 'foreman', email: '', phone: '' },
-                { id: 4, name: 'Dominic Amantite', code: 'Foreman 2', subType: 'foreman', email: '', phone: '' },
-                { id: 5, name: 'Dylan Weese', code: 'Foreman 3', subType: 'foreman', email: '', phone: '' },
-                { id: 6, name: 'Martin Lopez', code: 'Foreman 4', subType: 'foreman', email: '', phone: '' },
-                { id: 7, name: 'Ruben Flores', code: 'Foreman 5', subType: 'foreman', email: '', phone: '' },
-                { id: 8, name: 'Jose Reyes', code: 'Lead 1', subType: 'lead', email: '', phone: '' },
-                { id: 9, name: 'Christopher West', code: 'Operator 3', subType: 'operator', email: '', phone: '' },
-                { id: 10, name: 'Calvin Young', code: 'Operator 2', subType: 'operator', email: '', phone: '' },
-                { id: 11, name: 'Isaias Camacho', code: 'Operator 5', subType: 'operator', email: '', phone: '' },
-                { id: 12, name: 'Marcelo Perez', code: 'Operator 6', subType: 'operator', email: '', phone: '' },
-                { id: 13, name: 'Roy Segundo', code: 'Operator 7', subType: 'operator', email: '', phone: '' },
-                { id: 14, name: 'Blake Hartlieb', code: 'Operator 1', subType: 'operator', email: '', phone: '' },
-                { id: 15, name: 'Dillon Giacomini', code: 'Operator 4', subType: 'operator', email: '', phone: '' },
-                { id: 16, name: 'Sage Gugel', code: 'Operator 7', subType: 'operator', email: '', phone: '' },
-                { id: 17, name: 'Benny Shepher', code: 'Trucker 1', subType: 'trucker', email: '', phone: '' },
-                { id: 18, name: 'Tino Rivera', code: 'Trucker 2', subType: 'trucker', email: '', phone: '' },
-                { id: 19, name: 'Austin Matsler', code: 'Labor 1', subType: 'labor', email: '', phone: '' },
-                { id: 20, name: 'Clayton Setiak', code: 'Labor 3', subType: 'labor', email: '', phone: '' },
-                { id: 21, name: 'Jaime Gonzalez', code: 'Labor 4', subType: 'labor', email: '', phone: '' },
-                { id: 22, name: 'Nikolaos Patridis', code: 'Shop', subType: 'shop', email: '', phone: '' },
-                { id: 23, name: 'Anthony Giamonna', code: 'Op/Lab', subType: 'shop', email: '', phone: '' }
-            ]; 
+        function getHGEJobs() {
+            return [{ id: "102", name: "Seth Nobman Sunny Slope" }, { id: "121", name: "Yard Improvements" }, { id: "197", name: "I Street" }, { id: "209", name: "Haggerty 3950 I St" }, { id: "213", name: "Camp Newman Phase 4" }];
         }
 
         const root = ReactDOM.createRoot(document.getElementById('app'));
         root.render(<DispatchApp />);
     </script>
 </body>
-</html
+</html>
