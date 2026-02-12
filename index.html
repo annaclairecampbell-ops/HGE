@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>HGE Dispatch v11.7 - Split Dispatch</title>
+    <title>HGE Dispatch v11.8 - Professional Edition</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
@@ -11,17 +11,18 @@
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <style>
         .draggable { cursor: move; user-select: none; }
-        .bg-super { background: linear-gradient(135deg, #1e40af, #3b82f6); color: white; }
-        .bg-foreman { background: linear-gradient(135deg, #166534, #22c55e); color: white; }
-        .bg-operator { background: linear-gradient(135deg, #854d0e, #eab308); color: white; }
-        .bg-trucker { background: linear-gradient(135deg, #6b21a8, #a855f7); color: white; }
-        .bg-labor { background: linear-gradient(135deg, #9a3412, #f97316); color: white; }
+        .bg-super { background: #1e40af; color: white; }
+        .bg-foreman { background: #166534; color: white; }
+        .bg-operator { background: #854d0e; color: white; }
+        .bg-trucker { background: #6b21a8; color: white; }
+        .bg-labor { background: #9a3412; color: white; }
         .bg-heavy { background: #1e293b; color: white; }
+        .bg-misc { background: #475569; color: white; }
         .in-use { opacity: 0.2; grayscale: 100%; pointer-events: none; }
         @media print { .no-print { display: none; } }
     </style>
 </head>
-<body class="bg-slate-100">
+<body class="bg-slate-50">
     <div id="app"></div>
 
     <script type="text/babel">
@@ -34,191 +35,215 @@
             const [draggedItem, setDraggedItem] = useState(null);
 
             // Persistent State
-            const [assignments, setAssignments] = useState(() => JSON.parse(localStorage.getItem('hge_asgn_v117')) || []);
-            const [jobs, setJobs] = useState(() => JSON.parse(localStorage.getItem('hge_jobs_v117')) || [{id: 1, jobName: 'SELECT JOB', scope: '', start: '07:00', stop: '15:30'}]);
-            const [trucking, setTrucking] = useState(() => JSON.parse(localStorage.getItem('hge_truck_v117')) || [
-                {driver: 'Tino Rivera', start: '07:00', stop: '15:30', origin: '', dest: '', material: ''},
-                {driver: 'Benny Shepher', start: '07:00', stop: '15:30', origin: '', dest: '', material: ''}
-            ]);
+            const [assignments, setAssignments] = useState(() => JSON.parse(localStorage.getItem('hge_asgn_v118')) || []);
+            const [jobs, setJobs] = useState(() => JSON.parse(localStorage.getItem('hge_jobs_v118')) || [{id: 1, jobName: 'SELECT JOB', scope: '', start: '07:00', stop: '15:30'}]);
+            const [rentals, setRentals] = useState(() => JSON.parse(localStorage.getItem('hge_rent_v118')) || []);
+            const [truckingData, setTruckingData] = useState(() => JSON.parse(localStorage.getItem('hge_truck_v118')) || {
+                'Tino Rivera': { priority: '', jobNum: '', jobName: '', equip: '', load: '', unload: '', notes: '', contact: '', start: '07:00', stop: '15:30' },
+                'Benny Shepher': { priority: '', jobNum: '', jobName: '', equip: '', load: '', unload: '', notes: '', contact: '', start: '07:00', stop: '15:30' }
+            });
 
             useEffect(() => {
-                localStorage.setItem('hge_asgn_v117', JSON.stringify(assignments));
-                localStorage.setItem('hge_jobs_v117', JSON.stringify(jobs));
-                localStorage.setItem('hge_truck_v117', JSON.stringify(trucking));
-            }, [assignments, jobs, trucking]);
+                localStorage.setItem('hge_asgn_v118', JSON.stringify(assignments));
+                localStorage.setItem('hge_jobs_v118', JSON.stringify(jobs));
+                localStorage.setItem('hge_rent_v118', JSON.stringify(rentals));
+                localStorage.setItem('hge_truck_v118', JSON.stringify(truckingData));
+            }, [assignments, jobs, rentals, truckingData]);
 
-            const employees = getDefaultEmployees();
-            const equipment = getHGEEquipment();
-            const jobsList = getHGEJobs();
+            // Data Lists from Image
+            const employees = getFullRoster();
+            const equipment = getFullEquipment();
+            const jobsList = [{id: "102", name: "Sunny Slope"}, {id: "197", name: "I Street"}, {id: "213", name: "Camp Newman"}];
 
             const availablePersonnel = employees.filter(e => e.name.toLowerCase().includes(searchTerm.toLowerCase()));
-            const availableGear = equipment.filter(eq => eq.name.toLowerCase().includes(searchTerm.toLowerCase()));
+            const availableGear = [...equipment, ...rentals.filter(r => r.status === 'Active')].filter(eq => eq.name.toLowerCase().includes(searchTerm.toLowerCase()));
+            
             const isAssigned = (name) => assignments.some(a => a.date === selectedDate && a.name === name);
 
             const handleDrop = (section, index) => {
                 if (!draggedItem) return;
-                setAssignments([...assignments, { ...draggedItem, id: Date.now(), date: selectedDate, section, index, note: '' }]);
+                setAssignments([...assignments, { ...draggedItem, id: Date.now(), date: selectedDate, section, index }]);
                 setDraggedItem(null);
             };
 
-            return (
-                <div className="min-h-screen pb-20">
-                    <header className="bg-slate-900 text-white p-4 flex justify-between items-center no-print sticky top-0 z-50">
-                        <h1 className="text-xl font-black italic uppercase text-orange-500">HGE Ops v11.7</h1>
-                        <div className="flex gap-4">
-                            <button onClick={() => setJobs([...jobs, {id: Date.now(), jobName: 'SELECT JOB', scope: '', start: '07:00', stop: '15:30'}])} className="bg-orange-600 px-3 py-1 rounded text-[10px] font-bold">+ JOB ROW</button>
-                            <button onClick={() => window.print()} className="bg-slate-700 px-3 py-1 rounded text-[10px] font-bold">PRINT</button>
+            const TruckingBlock = ({ driver }) => (
+                <div onDragOver={e => e.preventDefault()} onDrop={() => handleDrop('truck', driver)} className="bg-white rounded-lg shadow-md border-t-4 border-purple-600 overflow-hidden mb-6">
+                    <div className="bg-slate-900 p-3 flex justify-between items-center text-white">
+                        <span className="font-black uppercase tracking-widest text-purple-400">{driver}</span>
+                        <div className="flex gap-2 text-[10px]">
+                            <input type="time" value={truckingData[driver].start} onChange={e => setTruckingData({...truckingData, [driver]: {...truckingData[driver], start: e.target.value}})} className="bg-slate-800 rounded p-1 border-none" />
+                            <input type="time" value={truckingData[driver].stop} onChange={e => setTruckingData({...truckingData, [driver]: {...truckingData[driver], stop: e.target.value}})} className="bg-slate-800 rounded p-1 border-none" />
                         </div>
-                    </header>
-
-                    <div className="max-w-[1600px] mx-auto p-4 flex flex-col lg:flex-row gap-6 mt-4">
-                        {/* SIDEBAR */}
-                        <aside className="w-full lg:w-72 no-print space-y-4">
-                            <div className="bg-white p-4 rounded-xl shadow border-2 border-orange-200">
-                                <input type="text" placeholder="SEARCH..." className="w-full p-2 bg-slate-100 rounded text-xs font-bold mb-4" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
-                                <input type="date" value={selectedDate} onChange={e => setSelectedDate(e.target.value)} className="w-full p-2 border rounded font-bold text-sm mb-4" />
-                                
-                                <div className="h-[60vh] overflow-y-auto pr-2 space-y-6">
-                                    <section>
-                                        <h3 className="text-[10px] font-black uppercase text-slate-400 border-b mb-2">Personnel</h3>
-                                        {availablePersonnel.map(e => (
-                                            <div key={e.id} draggable onDragStart={() => setDraggedItem({...e, category: 'people'})} className={`p-2 mb-1 rounded text-[10px] font-bold shadow-sm draggable bg-${e.subType} ${isAssigned(e.name)?'in-use':''}`}>{e.name}</div>
-                                        ))}
-                                    </section>
-                                    <section>
-                                        <h3 className="text-[10px] font-black uppercase text-slate-400 border-b mb-2">Equipment</h3>
-                                        {availableGear.map((eq, i) => (
-                                            <div key={i} draggable onDragStart={() => setDraggedItem({...eq, category: 'equip'})} className={`p-2 mb-1 rounded text-[10px] font-bold shadow-sm draggable bg-heavy ${isAssigned(eq.name)?'in-use':''}`}>{eq.name}</div>
-                                        ))}
-                                    </section>
-                                </div>
+                    </div>
+                    <div className="p-3 grid grid-cols-4 gap-2 bg-slate-50">
+                        {['priority', 'jobNum', 'jobName', 'equip', 'load', 'unload', 'notes', 'contact'].map(field => (
+                            <div key={field}>
+                                <label className="text-[8px] font-bold text-slate-400 uppercase">{field === 'jobNum' ? 'Job Number' : field}</label>
+                                <input 
+                                    className="w-full p-1 text-[10px] border rounded uppercase font-semibold"
+                                    value={truckingData[driver][field]}
+                                    onChange={e => setTruckingData({...truckingData, [driver]: {...truckingData[driver], [field]: e.target.value}})}
+                                />
                             </div>
-                        </aside>
-
-                        {/* MAIN BOARD */}
-                        <div className="flex-1 space-y-10">
-                            {/* SECTION: SITE PRODUCTION */}
-                            <section>
-                                <div className="flex items-center gap-2 mb-4">
-                                    <i className="fas fa-hard-hat text-orange-500"></i>
-                                    <h2 className="text-sm font-black uppercase tracking-widest">Site Production Dispatch</h2>
+                        ))}
+                    </div>
+                    <div className="p-3 border-t">
+                        <div className="flex flex-wrap gap-2">
+                            {assignments.filter(a => a.date === selectedDate && a.section === 'truck' && a.index === driver).map(a => (
+                                <div key={a.id} className="bg-slate-200 text-slate-700 px-2 py-1 rounded text-[10px] font-bold flex gap-2 items-center">
+                                    {a.name} <i onClick={() => setAssignments(assignments.filter(x => x.id !== a.id))} className="fas fa-times text-red-500 cursor-pointer"></i>
                                 </div>
-                                <div className="space-y-4">
-                                    {jobs.map((job, idx) => (
-                                        <div key={job.id} onDragOver={e => e.preventDefault()} onDrop={() => handleDrop('site', idx)} className="bg-white rounded-xl shadow border-l-8 border-blue-600 overflow-hidden">
-                                            <div className="bg-slate-900 p-2 flex flex-wrap gap-3 items-center">
-                                                <select className="bg-slate-800 text-yellow-400 font-bold text-[11px] p-1 rounded uppercase border-none" value={job.jobName} onChange={e => {let n=[...jobs]; n[idx].jobName=e.target.value; setJobs(n)}}>
-                                                    <option>SELECT JOB</option>
-                                                    {jobsList.map(j => <option key={j.id} value={j.name}>{j.id} - {j.name}</option>)}
-                                                </select>
-                                                <div className="flex items-center gap-2 text-white text-[10px] font-bold">
-                                                    <span>START:</span> <input type="time" value={job.start} onChange={e => {let n=[...jobs]; n[idx].start=e.target.value; setJobs(n)}} className="bg-slate-800 border-none p-1 rounded" />
-                                                    <span className="ml-2">STOP:</span> <input type="time" value={job.stop} onChange={e => {let n=[...jobs]; n[idx].stop=e.target.value; setJobs(n)}} className="bg-slate-800 border-none p-1 rounded" />
-                                                </div>
-                                                <input type="text" placeholder="Scope..." value={job.scope} onChange={e => {let n=[...jobs]; n[idx].scope=e.target.value; setJobs(n)}} className="bg-slate-800 text-slate-300 text-[11px] p-1 flex-1 rounded border-none" />
-                                                <button onClick={() => setJobs(jobs.filter(j => j.id !== job.id))} className="text-slate-500 hover:text-red-500"><i className="fas fa-trash"></i></button>
-                                            </div>
-                                            <div className="p-4 grid grid-cols-2 gap-4">
-                                                <div>
-                                                    <span className="text-[9px] font-black text-slate-400 uppercase">Manpower</span>
-                                                    <div className="flex flex-wrap gap-2 mt-1 min-h-[40px]">
-                                                        {assignments.filter(a => a.date === selectedDate && a.section === 'site' && a.index === idx && a.category === 'people').map(a => (
-                                                            <div key={a.id} className={`p-2 rounded shadow-sm flex items-center gap-2 bg-${a.subType} min-w-[120px]`}>
-                                                                <span className="text-[10px] font-bold uppercase flex-1">{a.name}</span>
-                                                                <i onClick={() => setAssignments(assignments.filter(x => x.id !== a.id))} className="fas fa-times opacity-40 cursor-pointer"></i>
-                                                            </div>
-                                                        ))}
-                                                    </div>
-                                                </div>
-                                                <div className="border-l pl-4">
-                                                    <span className="text-[9px] font-black text-slate-400 uppercase">Equipment</span>
-                                                    <div className="flex flex-wrap gap-2 mt-1 min-h-[40px]">
-                                                        {assignments.filter(a => a.date === selectedDate && a.section === 'site' && a.index === idx && a.category === 'equip').map(a => (
-                                                            <div key={a.id} className="p-2 rounded shadow-sm flex items-center gap-2 bg-heavy min-w-[120px]">
-                                                                <span className="text-[10px] font-bold uppercase flex-1 italic">{a.name}</span>
-                                                                <i onClick={() => setAssignments(assignments.filter(x => x.id !== a.id))} className="fas fa-times opacity-40 cursor-pointer"></i>
-                                                            </div>
-                                                        ))}
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
-                            </section>
-
-                            {/* SECTION: TRUCKING LOGISTICS */}
-                            <section>
-                                <div className="flex items-center gap-2 mb-4">
-                                    <i className="fas fa-truck-moving text-purple-600"></i>
-                                    <h2 className="text-sm font-black uppercase tracking-widest">Trucking Dispatch</h2>
-                                </div>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                    {trucking.map((t, i) => (
-                                        <div key={i} onDragOver={e => e.preventDefault()} onDrop={() => handleDrop('truck', i)} className="bg-white rounded-xl shadow border-l-8 border-purple-600 overflow-hidden">
-                                            <div className="bg-slate-900 p-3 text-white flex justify-between items-center">
-                                                <span className="text-sm font-black uppercase text-purple-400">{t.driver}</span>
-                                                <div className="flex gap-2 text-[10px]">
-                                                    <input type="time" value={t.start} onChange={e => {let n=[...trucking]; n[i].start=e.target.value; setTrucking(n)}} className="bg-slate-800 rounded p-1 border-none" />
-                                                    <input type="time" value={t.stop} onChange={e => {let n=[...trucking]; n[i].stop=e.target.value; setTrucking(n)}} className="bg-slate-800 rounded p-1 border-none" />
-                                                </div>
-                                            </div>
-                                            <div className="p-4 space-y-3 bg-slate-50">
-                                                <div className="grid grid-cols-2 gap-2">
-                                                    <div><label className="text-[9px] font-bold text-slate-400 uppercase">From (Origin)</label><input className="w-full p-2 text-xs border rounded uppercase font-bold" value={t.origin} onChange={e => {let n=[...trucking]; n[i].origin=e.target.value; setTrucking(n)}} /></div>
-                                                    <div><label className="text-[9px] font-bold text-slate-400 uppercase">To (Dest)</label><input className="w-full p-2 text-xs border rounded uppercase font-bold" value={t.dest} onChange={e => {let n=[...trucking]; n[i].dest=e.target.value; setTrucking(n)}} /></div>
-                                                </div>
-                                                <div><label className="text-[9px] font-bold text-slate-400 uppercase">Material Type</label><input className="w-full p-2 text-xs border rounded uppercase font-bold text-purple-700" value={t.material} onChange={e => {let n=[...trucking]; n[i].material=e.target.value; setTrucking(n)}} /></div>
-                                                
-                                                <div className="pt-2 border-t">
-                                                    <span className="text-[9px] font-black text-slate-400 uppercase">Truck & Trailer Gear</span>
-                                                    <div className="flex flex-wrap gap-2 mt-2">
-                                                        {assignments.filter(a => a.date === selectedDate && a.section === 'truck' && a.index === i).map(a => (
-                                                            <div key={a.id} className="bg-slate-200 text-slate-700 p-2 rounded text-[10px] font-bold flex gap-2">
-                                                                {a.name} <i onClick={() => setAssignments(assignments.filter(x => x.id !== a.id))} className="fas fa-times text-red-500 cursor-pointer"></i>
-                                                            </div>
-                                                        ))}
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
-                            </section>
+                            ))}
                         </div>
                     </div>
                 </div>
             );
+
+            return (
+                <div className="min-h-screen">
+                    <header className="bg-slate-900 text-white p-4 flex justify-between items-center no-print">
+                        <div className="flex items-center gap-3">
+                            <i className="fas fa-layer-group text-orange-500 text-xl"></i>
+                            <h1 className="text-xl font-black uppercase tracking-tighter">HGE Operations Center</h1>
+                        </div>
+                        <nav className="flex gap-6 uppercase text-[10px] font-bold tracking-widest">
+                            <button onClick={() => setActiveTab('schedule')} className={activeTab === 'schedule' ? 'text-orange-500' : ''}>Schedule</button>
+                            <button onClick={() => setActiveTab('rentals')} className={activeTab === 'rentals' ? 'text-orange-500' : ''}>Rentals</button>
+                        </nav>
+                    </header>
+
+                    <main className="p-4 flex flex-col lg:flex-row gap-6">
+                        <aside className="w-full lg:w-72 no-print">
+                            <div className="bg-white p-4 rounded-xl shadow border sticky top-4">
+                                <input type="text" placeholder="QUICK SEARCH..." className="w-full p-2 bg-slate-100 rounded text-[10px] font-bold mb-4" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
+                                <input type="date" value={selectedDate} onChange={e => setSelectedDate(e.target.value)} className="w-full p-2 border rounded font-bold text-xs mb-4" />
+                                <div className="h-[70vh] overflow-y-auto pr-2">
+                                    <h3 className="text-[10px] font-black text-slate-400 border-b mb-2 uppercase">Personnel</h3>
+                                    {availablePersonnel.map(e => (
+                                        <div key={e.id} draggable onDragStart={() => setDraggedItem({...e, category: 'people'})} className={`p-2 mb-1 rounded text-[10px] font-bold shadow-sm draggable bg-${e.subType} ${isAssigned(e.name)?'in-use':''}`}>{e.name}</div>
+                                    ))}
+                                    <h3 className="text-[10px] font-black text-slate-400 border-b mt-6 mb-2 uppercase">Fleet Assets</h3>
+                                    {availableGear.map((eq, i) => (
+                                        <div key={i} draggable onDragStart={() => setDraggedItem({...eq, category: 'equip'})} className={`p-2 mb-1 rounded text-[10px] font-bold shadow-sm draggable bg-heavy ${isAssigned(eq.name)?'in-use':''}`}>{eq.name}</div>
+                                    ))}
+                                </div>
+                            </div>
+                        </aside>
+
+                        <div className="flex-1">
+                            {activeTab === 'schedule' ? (
+                                <div className="space-y-12">
+                                    <section>
+                                        <h2 className="text-xs font-black uppercase tracking-widest mb-4 flex items-center gap-2 text-slate-500"><i className="fas fa-hard-hat text-orange-500"></i> Production Jobs</h2>
+                                        {jobs.map((job, idx) => (
+                                            <div key={job.id} onDragOver={e => e.preventDefault()} onDrop={() => handleDrop('site', idx)} className="bg-white rounded-lg shadow border-l-4 border-blue-600 mb-4 overflow-hidden">
+                                                <div className="bg-slate-900 p-2 flex gap-3 items-center">
+                                                    <select className="bg-slate-800 text-yellow-400 font-bold text-[10px] p-1 rounded uppercase border-none w-48" value={job.jobName} onChange={e => {let n=[...jobs]; n[idx].jobName=e.target.value; setJobs(n)}}>
+                                                        <option>SELECT JOB</option>
+                                                        {jobsList.map(j => <option key={j.id} value={j.name}>{j.id} - {j.name}</option>)}
+                                                    </select>
+                                                    <div className="flex items-center gap-2 text-white text-[9px] font-bold">
+                                                        <span>{job.start}</span><span className="text-slate-500">TO</span><span>{job.stop}</span>
+                                                    </div>
+                                                    <input type="text" placeholder="Scope..." value={job.scope} onChange={e => {let n=[...jobs]; n[idx].scope=e.target.value; setJobs(n)}} className="bg-slate-800 text-slate-300 text-[10px] p-1 flex-1 rounded border-none" />
+                                                    <button onClick={() => setJobs(jobs.filter(j => j.id !== job.id))} className="text-slate-600 hover:text-red-500 mx-2"><i className="fas fa-trash"></i></button>
+                                                </div>
+                                                <div className="p-3 grid grid-cols-2 gap-4">
+                                                    <div>
+                                                        <span className="text-[8px] font-black text-slate-400 uppercase">Manpower</span>
+                                                        <div className="flex flex-wrap gap-2 mt-1 min-h-[30px]">
+                                                            {assignments.filter(a => a.date === selectedDate && a.section === 'site' && a.index === idx && a.category === 'people').map(a => (
+                                                                <div key={a.id} className={`p-2 rounded flex items-center gap-2 bg-${a.subType} min-w-[110px]`}>
+                                                                    <span className="text-[10px] font-bold uppercase flex-1">{a.name}</span>
+                                                                    <i onClick={() => setAssignments(assignments.filter(x => x.id !== a.id))} className="fas fa-times opacity-40 cursor-pointer"></i>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                    <div className="border-l pl-4">
+                                                        <span className="text-[8px] font-black text-slate-400 uppercase">Equipment</span>
+                                                        <div className="flex flex-wrap gap-2 mt-1 min-h-[30px]">
+                                                            {assignments.filter(a => a.date === selectedDate && a.section === 'site' && a.index === idx && a.category === 'equip').map(a => (
+                                                                <div key={a.id} className="p-2 rounded flex items-center gap-2 bg-heavy min-w-[110px]">
+                                                                    <span className="text-[10px] font-bold uppercase flex-1 italic text-white">{a.name}</span>
+                                                                    <i onClick={() => setAssignments(assignments.filter(x => x.id !== a.id))} className="fas fa-times opacity-40 cursor-pointer text-white"></i>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ))}
+                                        <button onClick={() => setJobs([...jobs, {id: Date.now(), jobName: 'SELECT JOB', scope: '', start: '07:00', stop: '15:30'}])} className="w-full border-2 border-dashed border-slate-300 p-2 text-slate-400 font-bold text-xs hover:bg-white no-print">+ ADD PRODUCTION BLOCK</button>
+                                    </section>
+
+                                    <section>
+                                        <h2 className="text-xs font-black uppercase tracking-widest mb-4 flex items-center gap-2 text-slate-500"><i className="fas fa-truck-moving text-purple-600"></i> Trucking Logistics</h2>
+                                        <TruckingBlock driver="Tino Rivera" />
+                                        <TruckingBlock driver="Benny Shepher" />
+                                    </section>
+                                </div>
+                            ) : (
+                                <div className="bg-white p-8 rounded shadow border">
+                                    <h2 className="text-xl font-black uppercase italic mb-4">Rental Equipment Tracker</h2>
+                                    <form onSubmit={(e) => {
+                                        e.preventDefault();
+                                        const fd = new FormData(e.target);
+                                        setRentals([...rentals, { id: Date.now(), name: fd.get('n').toUpperCase(), vendor: fd.get('v').toUpperCase(), status: 'Active', subType: 'misc' }]);
+                                        e.target.reset();
+                                    }} className="flex gap-4 mb-8 bg-slate-50 p-4 rounded border-2 border-dashed">
+                                        <input name="n" placeholder="EQUIPMENT NAME (E.G. 100FT LIFT)" className="border p-2 rounded text-xs flex-1 uppercase font-bold" required />
+                                        <input name="v" placeholder="VENDOR (E.G. SUNBELT)" className="border p-2 rounded text-xs flex-1 uppercase font-bold" required />
+                                        <button type="submit" className="bg-blue-600 text-white px-6 py-2 rounded font-bold text-xs uppercase">Add to Assets</button>
+                                    </form>
+                                    <table className="w-full text-left text-[10px]">
+                                        <thead className="bg-slate-900 text-white uppercase tracking-wider"><tr><th className="p-3">Asset</th><th className="p-3">Vendor</th><th className="p-3">Status</th><th className="p-3">Actions</th></tr></thead>
+                                        <tbody className="divide-y">
+                                            {rentals.map(r => (
+                                                <tr key={r.id}>
+                                                    <td className="p-3 font-bold uppercase">{r.name}</td>
+                                                    <td className="p-3 text-slate-500 uppercase">{r.vendor}</td>
+                                                    <td className="p-3"><span className={`px-2 py-1 rounded font-black ${r.status==='Active'?'bg-green-100 text-green-700':'bg-red-100 text-red-700'}`}>{r.status}</span></td>
+                                                    <td className="p-3 flex gap-4">
+                                                        <button onClick={() => setRentals(rentals.map(x => x.id === r.id ? {...x, status: x.status === 'Active' ? 'Returned' : 'Active'} : x))} className="text-blue-600 font-bold underline">TOGGLE STATUS</button>
+                                                        <button onClick={() => setRentals(rentals.filter(x => x.id !== r.id))} className="text-red-400 font-bold underline">DELETE</button>
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            )}
+                        </div>
+                    </main>
+                </div>
+            );
         }
 
-        function getDefaultEmployees() {
+        // --- FULL ROSTER DATA FROM IMAGE ---
+        function getFullRoster() {
             return [
-                { id: 1, name: 'Mike Harris', subType: 'super' },
-                { id: 2, name: 'Michael Burchfield', subType: 'super' },
-                { id: 3, name: 'Bryan Dolinsek', subType: 'foreman' },
-                { id: 4, name: 'Dominic Amantite', subType: 'foreman' },
-                { id: 5, name: 'Dylan Weese', subType: 'foreman' },
-                { id: 17, name: 'Benny Shepher', subType: 'trucker' },
-                { id: 18, name: 'Tino Rivera', subType: 'trucker' },
-                { id: 19, name: 'Austin Matsler', subType: 'labor' }
+                { id: 1, name: 'Mike Harris', subType: 'super' }, { id: 2, name: 'Michael Burchfield', subType: 'super' },
+                { id: 3, name: 'Bryan Dolinsek', subType: 'foreman' }, { id: 4, name: 'Dominic Amantite', subType: 'foreman' },
+                { id: 5, name: 'Dylan Weese', subType: 'foreman' }, { id: 6, name: 'Martin Lopez', subType: 'foreman' },
+                { id: 7, name: 'Ruben Flores', subType: 'foreman' }, { id: 8, name: 'Jose Reyes', subType: 'operator' },
+                { id: 17, name: 'Benny Shepher', subType: 'trucker' }, { id: 18, name: 'Tino Rivera', subType: 'trucker' },
+                { id: 19, name: 'Austin Matsler', subType: 'labor' }, { id: 20, name: 'Clayton Setiak', subType: 'labor' },
+                { id: 21, name: 'Jaime Gonzalez', subType: 'labor' }, { id: 22, name: 'Nikolaos Patridis', subType: 'super' },
+                { id: 23, name: 'Anthony Giamonna', subType: 'labor' }, { id: 24, name: 'Christopher West', subType: 'operator' },
+                { id: 25, name: 'Blake Hartlieb', subType: 'operator' }, { id: 26, name: 'Calvin Young', subType: 'operator' },
+                { id: 27, name: 'Dillon Giacomini', subType: 'operator' }, { id: 28, name: 'Isaias Camacho', subType: 'operator' },
+                { id: 29, name: 'Marcelo Perez', subType: 'operator' }, { id: 30, name: 'Roy Segundo', subType: 'operator' },
+                { id: 31, name: 'Sage Gugel', subType: 'operator' }
             ];
         }
 
-        function getHGEEquipment() {
+        function getFullEquipment() {
             return [
-                { name: 'WT-03 Peterbilt 4k', subType: 'heavy' },
-                { name: 'WT-05 Peterbilt 2k', subType: 'heavy' },
-                { name: 'EQ-01 Trailer', subType: 'heavy' },
-                { name: 'EQ-02 Trailer', subType: 'heavy' }
-            ];
-        }
-
-        function getHGEJobs() {
-            return [{ id: "102", name: "Seth Nobman Sunny Slope" }, { id: "121", name: "Yard Improvements" }, { id: "197", name: "I Street" }];
-        }
-
-        const root = ReactDOM.createRoot(document.getElementById('app'));
-        root.render(<DispatchApp />);
-    </script>
-</body>
-</html>
+                { name: 'WT-03 Peterbilt 4k', subType: 'heavy' }, { name: 'WT-05 Peterbilt 2k', subType: 'heavy' },
+                { name: 'WT-06 Freightliner 2k', subType: 'heavy' }, { name: 'EQ-01 Trailer', subType: 'heavy' },
+                { name: 'EQ-02 Trailer', subType: 'heavy' }, { name: 'EXC JD 50G1 Mini', subType: 'heavy' },
+                { name: 'EXC JD 85G1 Med', subType: 'heavy' }, { name: 'DOZ JD 700K', subType: 'heavy' },
+                { name: 'Water Buffalo', subType: 'misc' }, { name: 'Wacker 1', subType: 'misc' },
+                { name: 'Wacker 2', subType: 'misc' }, { name: 'Wacker 3', subType: 'misc' },
+                { name: 'GPS 1', subType: 'misc
