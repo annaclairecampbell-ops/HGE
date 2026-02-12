@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>HGE Dispatch v11</title>
+    <title>HGE Dispatch v11 - Complete Fleet</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -15,9 +15,18 @@
         .draggable { cursor: move; user-select: none; transition: all 0.2s; }
         .drop-zone { min-height: 160px; transition: all 0.2s; border-radius: 12px; border: 2px solid #e2e8f0; background-color: #f8fafc; }
         .drop-zone.drag-over { background-color: #fff7ed; border-color: #f97316; border-style: dashed; }
-        .crew-badge { background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%); color: white; }
-        .equipment-badge { background: linear-gradient(135deg, #065f46 0%, #10b981 100%); color: white; }
-        .rental-badge { background: linear-gradient(135deg, #7c3aed 0%, #a855f7 100%); color: white; }
+        
+        /* Personnel & Equipment Color Gradients */
+        .bg-super { background: linear-gradient(135deg, #1e40af 0%, #3b82f6 100%); color: white; }
+        .bg-foreman { background: linear-gradient(135deg, #166534 0%, #22c55e 100%); color: white; }
+        .bg-operator { background: linear-gradient(135deg, #854d0e 0%, #eab308 100%); color: white; }
+        .bg-trucker { background: linear-gradient(135deg, #6b21a8 0%, #a855f7 100%); color: white; }
+        .bg-labor { background: linear-gradient(135deg, #9a3412 0%, #f97316 100%); color: white; }
+        .bg-lead { background: linear-gradient(135deg, #155e75 0%, #06b6d4 100%); color: white; }
+        .bg-shop { background: linear-gradient(135deg, #57534e 0%, #78716c 100%); color: white; }
+        .bg-heavy-eq { background: linear-gradient(135deg, #0f172a 0%, #334155 100%); color: white; }
+        .bg-misc-eq { background: linear-gradient(135deg, #713f12 0%, #a16207 100%); color: white; }
+        
         .in-use-red { background: #fecaca !important; border: 2px solid #ef4444 !important; color: #b91c1c !important; opacity: 0.9; cursor: not-allowed; }
         .tab-active { border-bottom: 4px solid #1e40af; color: #1e40af; }
         @media print { .no-print { display: none; } }
@@ -34,12 +43,10 @@
             const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
             const [draggedItem, setDraggedItem] = useState(null);
 
-            // DATA (Master Lists)
             const employees = getDefaultEmployees();
             const ownedEquipment = getHGEEquipment();
             const jobsList = getHGEJobs();
 
-            // PERSISTENT STATE
             const [assignments, setAssignments] = useState(() => JSON.parse(localStorage.getItem('hge_assign_v11')) || []);
             const [activeRowJobs, setActiveRowJobs] = useState(() => JSON.parse(localStorage.getItem('hge_rows_v11')) || [{jobName: 'SELECT JOB', scope: '', startTime: '07:00'}]);
             const [rentals, setRentals] = useState(() => JSON.parse(localStorage.getItem('hge_rentals_v11')) || []);
@@ -50,9 +57,7 @@
                 localStorage.setItem('hge_rentals_v11', JSON.stringify(rentals));
             }, [assignments, activeRowJobs, rentals]);
 
-            const isItemAssigned = (name) => {
-                return assignments.some(a => a.date === selectedDate && a.name === name);
-            };
+            const isItemAssigned = (name) => assignments.some(a => a.date === selectedDate && a.name === name);
 
             const handleDrop = (rowIndex) => {
                 if (!draggedItem || isItemAssigned(draggedItem.name)) return;
@@ -62,24 +67,27 @@
                     rowIndex: rowIndex,
                     name: draggedItem.name,
                     category: draggedItem.category,
+                    subType: draggedItem.subType || '',
                     note: ''
                 };
                 setAssignments([...assignments, newAssign]);
                 setDraggedItem(null);
             };
 
-            const addRental = (e) => {
-                e.preventDefault();
-                const formData = new FormData(e.target);
-                const newRental = {
-                    id: 'rent-' + Date.now(),
-                    name: formData.get('name'),
-                    vendor: formData.get('vendor'),
-                    startDate: formData.get('startDate'),
-                    status: 'Active'
-                };
-                setRentals([...rentals, newRental]);
-                e.target.reset();
+            const getBadgeClass = (item) => {
+                if (isItemAssigned(item.name)) return 'in-use-red';
+                switch(item.subType) {
+                    case 'super': return 'bg-super';
+                    case 'foreman': return 'bg-foreman';
+                    case 'operator': return 'bg-operator';
+                    case 'trucker': return 'bg-trucker';
+                    case 'labor': return 'bg-labor';
+                    case 'lead': return 'bg-lead';
+                    case 'shop': return 'bg-shop';
+                    case 'heavy': return 'bg-heavy-eq';
+                    case 'misc': return 'bg-misc-eq';
+                    default: return 'bg-slate-500';
+                }
             };
 
             return (
@@ -96,7 +104,7 @@
                     </header>
 
                     <nav className="bg-white border-b flex justify-center sticky top-0 z-50 shadow-sm no-print">
-                        {['schedule', 'rentals', 'personnel', 'fleet', 'directory'].map(t => (
+                        {['schedule', 'rentals', 'directory'].map(t => (
                             <button key={t} onClick={() => setActiveTab(t)} 
                                 className={`px-6 py-4 font-bold uppercase text-[10px] tracking-widest ${activeTab === t ? 'tab-active' : 'text-slate-400'}`}>
                                 {t}
@@ -112,30 +120,20 @@
                                     <input type="date" value={selectedDate} onChange={e => setSelectedDate(e.target.value)} className="w-full p-2 border rounded font-bold mb-4" />
                                     
                                     <section>
-                                        <h3 className="text-[10px] font-black uppercase text-blue-600 mb-2 italic">Crew</h3>
+                                        <h3 className="text-[10px] font-black uppercase text-slate-500 mb-2 italic border-b">Personnel</h3>
                                         {employees.map(e => (
                                             <div key={e.id} draggable={!isItemAssigned(e.name)} onDragStart={() => setDraggedItem({...e, category: 'crew'})}
-                                                className={`p-2 mb-1 rounded text-[11px] font-bold shadow-sm draggable ${isItemAssigned(e.name) ? 'in-use-red' : 'crew-badge'}`}>
-                                                {e.name}
+                                                className={`p-2 mb-1 rounded text-[10px] font-bold shadow-sm draggable uppercase ${getBadgeClass(e)}`}>
+                                                {e.name} <span className="opacity-60 float-right">{e.code}</span>
                                             </div>
                                         ))}
                                     </section>
 
                                     <section>
-                                        <h3 className="text-[10px] font-black uppercase text-purple-600 mb-2 italic">Active Rentals</h3>
-                                        {rentals.filter(r => r.status === 'Active').map(r => (
-                                            <div key={r.id} draggable={!isItemAssigned(r.name)} onDragStart={() => setDraggedItem({...r, category: 'rental'})}
-                                                className={`p-2 mb-1 rounded text-[11px] font-bold shadow-sm draggable ${isItemAssigned(r.name) ? 'in-use-red' : 'rental-badge'}`}>
-                                                {r.name} ({r.vendor})
-                                            </div>
-                                        ))}
-                                    </section>
-
-                                    <section>
-                                        <h3 className="text-[10px] font-black uppercase text-emerald-600 mb-2 italic">Owned Fleet</h3>
+                                        <h3 className="text-[10px] font-black uppercase text-slate-500 mb-2 italic border-b">Fleet & Tools</h3>
                                         {ownedEquipment.map(eq => (
                                             <div key={eq.id} draggable={!isItemAssigned(eq.name)} onDragStart={() => setDraggedItem({...eq, category: 'equip'})}
-                                                className={`p-2 mb-1 rounded text-[11px] font-bold shadow-sm draggable ${isItemAssigned(eq.name) ? 'in-use-red' : 'equipment-badge'}`}>
+                                                className={`p-2 mb-1 rounded text-[10px] font-bold shadow-sm draggable uppercase ${getBadgeClass(eq)}`}>
                                                 {eq.name}
                                             </div>
                                         ))}
@@ -155,35 +153,28 @@
                                                     <option>SELECT JOB</option>
                                                     {jobsList.map(j => <option key={j.id} value={j.name}>{j.id} - {j.name}</option>)}
                                                 </select>
-                                                
-                                                <div className="flex items-center gap-2 text-white">
-                                                    <span className="text-[10px] font-bold uppercase text-slate-400">Start Time:</span>
-                                                    <input type="time" value={row.startTime} onChange={(e) => {
-                                                        const copy = [...activeRowJobs];
-                                                        copy[idx].startTime = e.target.value;
-                                                        setActiveRowJobs(copy);
-                                                    }} className="bg-slate-800 p-1 rounded text-xs border-none text-white" />
-                                                </div>
-
-                                                <input type="text" placeholder="Scope of Work / Today's Objective..." value={row.scope} 
+                                                <input type="time" value={row.startTime} onChange={(e) => {
+                                                    const copy = [...activeRowJobs];
+                                                    copy[idx].startTime = e.target.value;
+                                                    setActiveRowJobs(copy);
+                                                }} className="bg-slate-800 p-1 rounded text-xs border-none text-white" />
+                                                <input type="text" placeholder="Scope of Work..." value={row.scope} 
                                                     onChange={(e) => {
                                                         const copy = [...activeRowJobs];
                                                         copy[idx].scope = e.target.value;
                                                         setActiveRowJobs(copy);
-                                                    }} className="bg-slate-800 flex-1 p-2 rounded text-xs text-slate-200 placeholder-slate-500 border-none" />
-                                                
+                                                    }} className="bg-slate-800 flex-1 p-2 rounded text-xs text-slate-200 border-none" />
                                                 <button onClick={() => setActiveRowJobs(activeRowJobs.filter((_, i) => i !== idx))} className="text-slate-500 hover:text-red-500"><i className="fas fa-trash"></i></button>
                                             </div>
-
                                             <div className="p-4 flex flex-wrap gap-2">
                                                 {assignments.filter(a => a.date === selectedDate && a.rowIndex === idx).map(a => (
-                                                    <div key={a.id} className={`p-3 rounded-lg shadow min-w-[140px] ${a.category === 'crew' ? 'crew-badge' : a.category === 'rental' ? 'rental-badge' : 'equipment-badge'}`}>
+                                                    <div key={a.id} className={`p-3 rounded-lg shadow min-w-[140px] ${getBadgeClass(a)}`}>
                                                         <div className="flex justify-between items-center mb-1">
-                                                            <p className="text-[11px] font-bold">{a.name}</p>
+                                                            <p className="text-[10px] font-black uppercase">{a.name}</p>
                                                             <button onClick={() => setAssignments(assignments.filter(x => x.id !== a.id))} className="text-white/50"><i className="fas fa-times"></i></button>
                                                         </div>
                                                         <input type="text" placeholder="Note..." value={a.note} onChange={(e) => setAssignments(assignments.map(item => item.id === a.id ? {...item, note: e.target.value} : item))}
-                                                            className="w-full bg-black/20 rounded px-1 py-1 text-[9px] text-white border-none" />
+                                                            className="w-full bg-black/20 rounded px-1 py-1 text-[9px] text-white border-none placeholder-white/40" />
                                                     </div>
                                                 ))}
                                             </div>
@@ -191,51 +182,130 @@
                                     ))}
                                 </div>
                             </div>
-                        ) : activeTab === 'rentals' ? (
-                            <div className="space-y-6">
-                                <form onSubmit={addRental} className="bg-white p-6 rounded-xl shadow border grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
-                                    <div><label className="text-[10px] font-bold uppercase">Equipment Name</label><input name="name" required className="w-full p-2 border rounded text-xs" placeholder="e.g. 50G Excavator" /></div>
-                                    <div><label className="text-[10px] font-bold uppercase">Vendor</label><input name="vendor" required className="w-full p-2 border rounded text-xs" placeholder="e.g. Aaction Rents" /></div>
-                                    <div><label className="text-[10px] font-bold uppercase">Start Date</label><input name="startDate" type="date" required className="w-full p-2 border rounded text-xs" /></div>
-                                    <button type="submit" className="bg-purple-600 text-white p-2 rounded font-bold text-xs uppercase hover:bg-purple-500">Add to Fleet</button>
-                                </form>
-
-                                <div className="bg-white rounded-xl shadow border overflow-hidden">
-                                    <table className="w-full text-left text-xs">
-                                        <thead className="bg-slate-900 text-white uppercase text-[10px]">
-                                            <tr><th className="p-4">Equipment</th><th className="p-4">Vendor</th><th className="p-4">On-Rent Date</th><th className="p-4">Status</th><th className="p-4">Actions</th></tr>
-                                        </thead>
-                                        <tbody className="divide-y">
-                                            {rentals.map(r => (
-                                                <tr key={r.id} className={r.status === 'Returned' ? 'opacity-50 bg-slate-50' : ''}>
-                                                    <td className="p-4 font-bold">{r.name}</td>
-                                                    <td className="p-4">{r.vendor}</td>
-                                                    <td className="p-4">{r.startDate}</td>
-                                                    <td className="p-4"><span className={`px-2 py-1 rounded text-[10px] font-bold ${r.status === 'Active' ? 'bg-green-100 text-green-700' : 'bg-slate-200 text-slate-600'}`}>{r.status}</span></td>
-                                                    <td className="p-4">
-                                                        {r.status === 'Active' ? 
-                                                            <button onClick={() => setRentals(rentals.map(x => x.id === r.id ? {...x, status: 'Returned'} : x))} className="text-red-500 font-bold">Mark Returned</button> :
-                                                            <button onClick={() => setRentals(rentals.filter(x => x.id !== r.id))} className="text-slate-400 underline">Delete Record</button>
-                                                        }
-                                                    </td>
-                                                </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
-                                </div>
+                        ) : activeTab === 'directory' ? (
+                            <div className="bg-white rounded-xl shadow border overflow-hidden">
+                                <table className="w-full text-left text-xs">
+                                    <thead className="bg-slate-900 text-white uppercase">
+                                        <tr><th className="p-4">Category</th><th className="p-4">Code</th><th className="p-4">Name/Asset</th></tr>
+                                    </thead>
+                                    <tbody className="divide-y">
+                                        {[...employees, ...ownedEquipment].map((item, i) => (
+                                            <tr key={i} className="hover:bg-slate-50">
+                                                <td className="p-3 uppercase font-bold text-slate-400 text-[10px]">{item.subType || 'Asset'}</td>
+                                                <td className="p-3 font-mono text-[10px]">{item.code || '-'}</td>
+                                                <td className="p-3">
+                                                    <span className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase ${getBadgeClass(item)}`}>
+                                                        {item.name}
+                                                    </span>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
                             </div>
-                        ) : (
-                            <div className="bg-white p-8 rounded-xl border italic text-slate-400 text-center">Reference lists for Personnel and Fleet. Use the 'Schedule' tab to dispatch.</div>
-                        )}
+                        ) : null}
                     </main>
                 </div>
             );
         }
 
-        // KEEPING DATA FUNCTIONS FROM PREVIOUS VERSION
-        function getHGEJobs() { return [{ id: "102", name: "Seth Nobman Sunny Slope" }, { id: "121", name: "Yard Improvements" }, { id: "197", name: "I Street" }, { id: "209", name: "Haggerty 3950 I St" }, { id: "213", name: "Camp Newman Phase 4" }]; }
-        function getHGEEquipment() { return [{ id: 'eq1', name: 'CAT 320 Excavator', category: 'equip' }, { id: 'eq2', name: 'JD 310L Backhoe', category: 'equip' }]; }
-        function getDefaultEmployees() { return [{ id: 1, name: 'Mike Harris' }, { id: 5, name: 'Bryan Dolinsek' }, { id: 11, name: 'Dominic Amantite' }, { id: 2, name: 'Austin Matsler' }]; }
+        function getHGEJobs() { 
+            return [
+                { id: "102", name: "Seth Nobman Sunny Slope" }, 
+                { id: "121", name: "Yard Improvements" }, 
+                { id: "197", name: "I Street" }, 
+                { id: "209", name: "Haggerty 3950 I St" }, 
+                { id: "213", name: "Camp Newman Phase 4" }
+            ]; 
+        }
+
+        function getHGEEquipment() { 
+            return [
+                // Water Trucks
+                { id: 'wt1', name: 'WT-03 3-Axle Peterbilt (4k Gal)', subType: 'heavy' },
+                { id: 'wt2', name: 'WT-05 2-Axle Peterbilt (2k Gal)', subType: 'heavy' },
+                { id: 'wt3', name: 'WT-06 2-Axle Freightliner (2k Gal)', subType: 'heavy' },
+                { id: 'bt1', name: 'BT-01 Ford N8000 Off Road', subType: 'heavy' },
+                { id: 'bt2', name: 'BT-03 Freightliner - Tino', subType: 'heavy' },
+                
+                // Heavy & Select Equipment
+                { id: 'ex1', name: 'EXC JD 50G1 Mini Ex', subType: 'heavy' },
+                { id: 'ex2', name: 'EXC JD 50G2 Mini Ex', subType: 'heavy' },
+                { id: 'ex3', name: 'EXC JD 50G3 Mini Ex', subType: 'heavy' },
+                { id: 'ex4', name: 'EXC JD 85G1 Medium Ex', subType: 'heavy' },
+                { id: 'ex5', name: 'EXC JD 135G1 Medium Ex', subType: 'heavy' },
+                { id: 'ex6', name: 'EXC JD 135G2 Medium Ex', subType: 'heavy' },
+                { id: 'ex7', name: 'EXC JD 245G1 Large Ex', subType: 'heavy' },
+                { id: 'dz1', name: 'DOZ JD 700K Dozer', subType: 'heavy' },
+                { id: 'pv1', name: 'Paver 385B Paver', subType: 'heavy' },
+                { id: 'rl1', name: '48" DDR1 Smooth Drum Roller', subType: 'heavy' },
+                { id: 'rl2', name: '48" DDR2 Smooth Drum Roller', subType: 'heavy' },
+                { id: 'sk1', name: 'JD 210LE1 Skip Loader', subType: 'heavy' },
+                { id: 'sk2', name: 'JD 210LE2 Skip Loader', subType: 'heavy' },
+                { id: 'sk3', name: 'JD 210LE3 Skip Loader', subType: 'heavy' },
+                { id: 'cp1', name: 'Compact CP4 Pad Foot Compactor', subType: 'heavy' },
+                { id: 'ld1', name: 'CAT 930G Loader', subType: 'heavy' },
+                { id: 'rm1', name: 'Rammex Remote Compactor', subType: 'heavy' },
+                { id: 'sk4', name: 'Anton SS 259 Skidsteer', subType: 'heavy' },
+                { id: 'sk5', name: 'JD 325G SS1 Skidsteer', subType: 'heavy' },
+                { id: 'sk6', name: 'JD 325G SS2 Skidsteer', subType: 'heavy' },
+                
+                // Trailers & Flatbeds
+                { id: 'fb1', name: 'FB-01 Flatbed F550 4x4', subType: 'heavy' },
+                { id: 'tr1', name: 'EQ-01 TT-01 Trailer', subType: 'heavy' },
+                { id: 'tr2', name: 'EQ-02 Traitmax Trailer', subType: 'heavy' },
+                { id: 'tr3', name: 'EQ-03 Big Tex Trailer', subType: 'heavy' },
+                { id: 'tr4', name: 'EQ-04 Diamond C Gooseneck', subType: 'heavy' },
+                { id: 'tr5', name: 'EQ-05 Valor Trailer', subType: 'heavy' },
+
+                // Foreman Trucks (Match Foremen Colors)
+                { id: 'pt1', name: 'PT-01 Mike Harris Truck', subType: 'foreman' },
+                { id: 'pt4', name: 'PT-04 Martin Lopez Truck', subType: 'foreman' },
+                { id: 'ft3', name: 'FT-03 Bryan Dolinsek Truck', subType: 'foreman' },
+                { id: 'ft5', name: 'FT-05 Dylan Weese Truck', subType: 'foreman' },
+                { id: 'ft6', name: 'FT-06 Dominic Amantite Truck', subType: 'foreman' },
+                { id: 'st1', name: 'ST-01 Nikolaos Patridis Truck', subType: 'shop' },
+
+                // Misc & Tools
+                { id: 'kb1', name: 'Kick Broom', subType: 'misc' },
+                { id: 'fk1', name: 'Forklift JLG Reach', subType: 'misc' },
+                { id: 'wb1', name: 'Water Buffalo', subType: 'misc' },
+                { id: 'tp1', name: 'Tackpot TP-01', subType: 'misc' },
+                { id: 'ac1', name: 'Air Compressor AC-01', subType: 'misc' },
+                { id: 'wc1', name: 'Wacker 1', subType: 'misc' },
+                { id: 'wc2', name: 'Wacker 2', subType: 'misc' },
+                { id: 'wc5', name: 'Wacker 5', subType: 'misc' },
+                { id: 'gps1', name: 'GPS Unit 1', subType: 'misc' }
+            ]; 
+        }
+
+        function getDefaultEmployees() { 
+            return [
+                { id: 1, name: 'Mike Harris', code: 'Super 0', subType: 'super' },
+                { id: 2, name: 'Michael Burchfield', code: 'Super 1', subType: 'super' },
+                { id: 3, name: 'Bryan Dolinsek', code: 'Foreman 1', subType: 'foreman' },
+                { id: 4, name: 'Dominic Amantite', code: 'Foreman 2', subType: 'foreman' },
+                { id: 5, name: 'Dylan Weese', code: 'Foreman 3', subType: 'foreman' },
+                { id: 6, name: 'Martin Lopez', code: 'Foreman 4', subType: 'foreman' },
+                { id: 7, name: 'Ruben Flores', code: 'Foreman 5', subType: 'foreman' },
+                { id: 8, name: 'Jose Reyes', code: 'Lead 1', subType: 'lead' },
+                { id: 9, name: 'Christopher West', code: 'Operator 3', subType: 'operator' },
+                { id: 10, name: 'Calvin Young', code: 'Operator 2', subType: 'operator' },
+                { id: 11, name: 'Isaias Camacho', code: 'Operator 5', subType: 'operator' },
+                { id: 12, name: 'Marcelo Perez', code: 'Operator 6', subType: 'operator' },
+                { id: 13, name: 'Roy Segundo', code: 'Operator 7', subType: 'operator' },
+                { id: 14, name: 'Blake Hartlieb', code: 'Operator 1', subType: 'operator' },
+                { id: 15, name: 'Dillon Giacomini', code: 'Operator 4', subType: 'operator' },
+                { id: 16, name: 'Sage Gugel', code: 'Operator 7', subType: 'operator' },
+                { id: 17, name: 'Benny Shepher', code: 'Trucker 1', subType: 'trucker' },
+                { id: 18, name: 'Tino Rivera', code: 'Trucker 2', subType: 'trucker' },
+                { id: 19, name: 'Austin Matsler', code: 'Labor 1', subType: 'labor' },
+                { id: 20, name: 'Clayton Setiak', code: 'Labor 3', subType: 'labor' },
+                { id: 21, name: 'Jaime Gonzalez', code: 'Labor 4', subType: 'labor' },
+                { id: 22, name: 'Nikolaos Patridis', code: 'Shop', subType: 'shop' },
+                { id: 23, name: 'Anthony Giamonna', code: 'Op/Lab', subType: 'shop' }
+            ]; 
+        }
 
         const root = ReactDOM.createRoot(document.getElementById('app'));
         root.render(<DispatchApp />);
