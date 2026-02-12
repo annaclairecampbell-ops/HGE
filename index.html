@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>HGE Dispatch v11.4 - Organized Blocks</title>
+    <title>HGE Dispatch v11.5 - Pro Search & Categorized Blocks</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -16,14 +16,18 @@
         .drop-zone { min-height: 160px; transition: all 0.2s; border-radius: 12px; border: 2px solid #e2e8f0; background-color: #f8fafc; }
         .drop-zone.drag-over { background-color: #fff7ed; border-color: #f97316; border-style: dashed; }
         
-        /* Gradients */
+        /* Gradients & Styles */
         .bg-super { background: linear-gradient(135deg, #1e40af, #3b82f6); color: white; }
         .bg-foreman { background: linear-gradient(135deg, #166534, #22c55e); color: white; }
+        .bg-operator { background: linear-gradient(135deg, #854d0e, #eab308); color: white; }
+        .bg-trucker { background: linear-gradient(135deg, #6b21a8, #a855f7); color: white; }
+        .bg-labor { background: linear-gradient(135deg, #9a3412, #f97316); color: white; }
         .bg-heavy { background: linear-gradient(135deg, #0f172a, #334155); color: white; }
         .bg-rental { background: linear-gradient(135deg, #4338ca, #6366f1); color: white; }
         .bg-misc { background: linear-gradient(135deg, #713f12, #a16207); color: white; }
         
-        .in-use { opacity: 0.25; grayscale: 100%; pointer-events: none; border: 1px dashed #cbd5e1 !important; }
+        .in-use { opacity: 0.2; grayscale: 100%; pointer-events: none; border: 1px dashed #cbd5e1 !important; }
+        .search-input:focus { outline: 2px solid #f97316; }
         @media print { .no-print { display: none; } }
     </style>
 </head>
@@ -31,27 +35,37 @@
     <div id="app"></div>
 
     <script type="text/babel">
-        const { useState, useEffect } = React;
+        const { useState, useEffect, useMemo } = React;
 
         function DispatchApp() {
             const [activeTab, setActiveTab] = useState('schedule');
             const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
             const [draggedItem, setDraggedItem] = useState(null);
+            const [searchTerm, setSearchTerm] = useState('');
 
             // Data state
-            const [assignments, setAssignments] = useState(() => JSON.parse(localStorage.getItem('hge_asgn_v11')) || []);
-            const [activeRowJobs, setActiveRowJobs] = useState(() => JSON.parse(localStorage.getItem('hge_rows_v11')) || [{jobName: 'SELECT JOB', scope: '', startTime: '07:00'}]);
-            const [rentals, setRentals] = useState(() => JSON.parse(localStorage.getItem('hge_rentals_v11')) || []);
+            const [assignments, setAssignments] = useState(() => JSON.parse(localStorage.getItem('hge_asgn_v11.5')) || []);
+            const [activeRowJobs, setActiveRowJobs] = useState(() => JSON.parse(localStorage.getItem('hge_rows_v11.5')) || [{jobName: 'SELECT JOB', scope: '', startTime: '07:00'}]);
+            const [rentals, setRentals] = useState(() => JSON.parse(localStorage.getItem('hge_rentals_v11.5')) || []);
 
             useEffect(() => {
-                localStorage.setItem('hge_asgn_v11', JSON.stringify(assignments));
-                localStorage.setItem('hge_rows_v11', JSON.stringify(activeRowJobs));
-                localStorage.setItem('hge_rentals_v11', JSON.stringify(rentals));
+                localStorage.setItem('hge_asgn_v11.5', JSON.stringify(assignments));
+                localStorage.setItem('hge_rows_v11.5', JSON.stringify(activeRowJobs));
+                localStorage.setItem('hge_rentals_v11.5', JSON.stringify(rentals));
             }, [assignments, activeRowJobs, rentals]);
 
             const employees = getDefaultEmployees();
             const equipment = getHGEEquipment();
             const jobsList = getHGEJobs();
+
+            // Search filtering logic
+            const filteredEmployees = useMemo(() => 
+                employees.filter(e => e.name.toLowerCase().includes(searchTerm.toLowerCase())),
+            [searchTerm, employees]);
+
+            const filteredEquipment = useMemo(() => 
+                equipment.filter(eq => eq.name.toLowerCase().includes(searchTerm.toLowerCase())),
+            [searchTerm, equipment]);
 
             const isItemAssigned = (name) => assignments.some(a => a.date === selectedDate && a.name === name);
 
@@ -62,7 +76,7 @@
                     date: selectedDate,
                     rowIndex: rowIndex,
                     name: draggedItem.name,
-                    category: draggedItem.category, // 'people' or 'equip'
+                    category: draggedItem.category, 
                     subType: draggedItem.subType,
                     note: ''
                 };
@@ -76,57 +90,80 @@
                 const people = crew.filter(c => c.category === 'people').map(p => p.name).join(', ');
                 const gear = crew.filter(c => c.category === 'equip').map(g => g.name).join(', ');
                 
-                const message = `HGE DISPATCH: ${job.jobName}\nStart: ${job.startTime}\nCrew: ${people}\nEquipment: ${gear}`;
+                const message = `HGE DISPATCH (${selectedDate})\nJOB: ${job.jobName}\nSTART: ${job.startTime}\nSCOPE: ${job.scope}\n\nCREW: ${people}\nEQUIPMENT: ${gear}`;
                 
                 if (type === 'email') {
-                    window.location.href = `mailto:?subject=Dispatch ${job.jobName}&body=${encodeURIComponent(message)}`;
+                    window.location.href = `mailto:?subject=Dispatch: ${job.jobName}&body=${encodeURIComponent(message)}`;
                 } else {
                     window.location.href = `sms:?body=${encodeURIComponent(message)}`;
                 }
             };
 
             return (
-                <div className="min-h-screen flex flex-col">
+                <div className="min-h-screen flex flex-col font-sans">
                     <header className="bg-slate-900 text-white p-4 flex justify-between items-center no-print">
-                        <h1 className="text-xl font-black italic uppercase tracking-tighter text-orange-500">HGE Operations v11.4</h1>
+                        <div className="flex items-center gap-3">
+                            <i className="fas fa-truck-monster text-orange-500 text-2xl"></i>
+                            <h1 className="text-xl font-black italic uppercase tracking-tighter">HGE Operations</h1>
+                        </div>
                         <div className="flex gap-2">
                             <button onClick={() => setActiveRowJobs([...activeRowJobs, {jobName: 'SELECT JOB', scope: '', startTime: '07:00'}])} className="bg-orange-600 px-3 py-1 rounded text-[10px] font-bold">+ ADD JOB ROW</button>
-                            <button onClick={() => window.print()} className="bg-slate-700 px-3 py-1 rounded text-[10px] font-bold">PRINT</button>
+                            <button onClick={() => window.print()} className="bg-slate-700 px-3 py-1 rounded text-[10px] font-bold uppercase">Print Board</button>
                         </div>
                     </header>
 
-                    <nav className="bg-white border-b flex justify-center no-print">
+                    <nav className="bg-white border-b flex justify-center no-print sticky top-0 z-50 shadow-sm">
                         {['schedule', 'rentals', 'directory'].map(t => (
-                            <button key={t} onClick={() => setActiveTab(t)} className={`px-6 py-4 font-bold uppercase text-[10px] tracking-widest ${activeTab === t ? 'border-b-4 border-blue-600 text-blue-600' : 'text-slate-400'}`}>{t}</button>
+                            <button key={t} onClick={() => setActiveTab(t)} className={`px-6 py-4 font-bold uppercase text-[10px] tracking-widest ${activeTab === t ? 'border-b-4 border-orange-500 text-orange-600' : 'text-slate-400'}`}>{t}</button>
                         ))}
                     </nav>
 
-                    <main className="p-4 flex flex-col lg:flex-row gap-6">
+                    <main className="p-4 flex flex-col lg:flex-row gap-6 container mx-auto">
                         {activeTab === 'schedule' && (
                             <>
-                                {/* Sidebar */}
+                                {/* SIDEBAR SEARCH & LIST */}
                                 <div className="w-full lg:w-1/4 no-print space-y-4">
-                                    <input type="date" value={selectedDate} onChange={e => setSelectedDate(e.target.value)} className="w-full p-2 border rounded font-bold" />
-                                    
-                                    <div className="bg-white p-3 rounded shadow-sm border h-[70vh] overflow-y-auto">
-                                        <h3 className="text-[10px] font-bold uppercase text-slate-400 mb-2 border-b">Personnel</h3>
-                                        {employees.map(e => (
-                                            <div key={e.id} draggable onDragStart={() => setDraggedItem({...e, category: 'people'})} className={`p-2 mb-1 rounded text-[10px] font-bold shadow-sm draggable bg-${e.subType} ${isItemAssigned(e.name) ? 'in-use' : ''}`}>{e.name}</div>
-                                        ))}
-                                        
-                                        <h3 className="text-[10px] font-bold uppercase text-slate-400 mt-4 mb-2 border-b">Fleet & Tools</h3>
-                                        {equipment.map((eq, i) => (
-                                            <div key={i} draggable onDragStart={() => setDraggedItem({...eq, category: 'equip'})} className={`p-2 mb-1 rounded text-[10px] font-bold shadow-sm draggable bg-${eq.subType} ${isItemAssigned(eq.name) ? 'in-use' : ''}`}>{eq.name}</div>
-                                        ))}
+                                    <div className="bg-white p-4 rounded-xl shadow border">
+                                        <label className="text-[10px] font-black uppercase text-slate-400 block mb-2 tracking-widest">Global Search</label>
+                                        <div className="relative">
+                                            <i className="fas fa-search absolute left-3 top-3 text-slate-300"></i>
+                                            <input 
+                                                type="text" 
+                                                placeholder="Find Personnel or Equipment..." 
+                                                className="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm search-input"
+                                                value={searchTerm}
+                                                onChange={(e) => setSearchTerm(e.target.value)}
+                                            />
+                                        </div>
+                                    </div>
 
-                                        <h3 className="text-[10px] font-bold uppercase text-indigo-600 mt-4 mb-2 border-b">Rentals</h3>
-                                        {rentals.filter(r => r.status === 'Active').map(r => (
-                                            <div key={r.id} draggable onDragStart={() => setDraggedItem({...r, category: 'equip'})} className={`p-2 mb-1 rounded text-[10px] font-bold shadow-sm draggable bg-rental ${isItemAssigned(r.name) ? 'in-use' : ''}`}>{r.name}</div>
-                                        ))}
+                                    <div className="bg-white p-4 rounded-xl shadow border h-[65vh] overflow-y-auto">
+                                        <input type="date" value={selectedDate} onChange={e => setSelectedDate(e.target.value)} className="w-full p-2 border rounded font-bold mb-4" />
+                                        
+                                        <h3 className="text-[10px] font-bold uppercase text-slate-400 mb-2 border-b">Personnel</h3>
+                                        <div className="space-y-1 mb-6">
+                                            {filteredEmployees.map(e => (
+                                                <div key={e.id} draggable onDragStart={() => setDraggedItem({...e, category: 'people'})} className={`p-2 rounded text-[10px] font-bold shadow-sm draggable bg-${e.subType} ${isItemAssigned(e.name) ? 'in-use' : ''}`}>{e.name}</div>
+                                            ))}
+                                        </div>
+                                        
+                                        <h3 className="text-[10px] font-bold uppercase text-slate-400 mb-2 border-b">Fleet & Tools</h3>
+                                        <div className="space-y-1 mb-6">
+                                            {filteredEquipment.map((eq, i) => (
+                                                <div key={i} draggable onDragStart={() => setDraggedItem({...eq, category: 'equip'})} className={`p-2 rounded text-[10px] font-bold shadow-sm draggable bg-${eq.subType} ${isItemAssigned(eq.name) ? 'in-use' : ''}`}>{eq.name}</div>
+                                            ))}
+                                        </div>
+
+                                        <h3 className="text-[10px] font-bold uppercase text-indigo-600 mb-2 border-b">Rentals</h3>
+                                        <div className="space-y-1">
+                                            {rentals.filter(r => r.status === 'Active' && r.name.toLowerCase().includes(searchTerm.toLowerCase())).map(r => (
+                                                <div key={r.id} draggable onDragStart={() => setDraggedItem({...r, category: 'equip'})} className={`p-2 rounded text-[10px] font-bold shadow-sm draggable bg-rental ${isItemAssigned(r.name) ? 'in-use' : ''}`}>{r.name}</div>
+                                            ))}
+                                        </div>
                                     </div>
                                 </div>
 
-                                {/* Board */}
+                                {/* DISPATCH BOARD */}
                                 <div className="flex-1 space-y-4">
                                     {activeRowJobs.map((row, idx) => {
                                         const jobCrew = assignments.filter(a => a.date === selectedDate && a.rowIndex === idx);
@@ -134,31 +171,34 @@
                                         const equipAssigns = jobCrew.filter(a => a.category === 'equip');
 
                                         return (
-                                            <div key={idx} onDragOver={e => e.preventDefault()} onDrop={() => handleDrop(idx)} className="bg-white rounded-xl shadow border-2 border-slate-200 overflow-hidden drop-zone">
-                                                <div className="bg-slate-900 p-3 flex items-center gap-4">
-                                                    <select value={row.jobName} onChange={e => {const n=[...activeRowJobs]; n[idx].jobName=e.target.value; setActiveRowJobs(n)}} className="bg-slate-800 text-yellow-400 font-bold text-xs p-1 rounded border-none uppercase">
+                                            <div key={idx} onDragOver={e => e.preventDefault()} onDrop={() => handleDrop(idx)} className="bg-white rounded-xl shadow-md border-2 border-slate-200 overflow-hidden drop-zone transition-all">
+                                                <div className="bg-slate-900 p-3 flex flex-wrap items-center gap-4">
+                                                    <select value={row.jobName} onChange={e => {const n=[...activeRowJobs]; n[idx].jobName=e.target.value; setActiveRowJobs(n)}} className="bg-slate-800 text-yellow-400 font-bold text-xs p-1 rounded border-none uppercase w-full md:w-auto">
                                                         <option>SELECT JOB</option>
                                                         {jobsList.map(j => <option key={j.id} value={j.name}>{j.id} - {j.name}</option>)}
                                                     </select>
                                                     <input type="time" value={row.startTime} onChange={e => {const n=[...activeRowJobs]; n[idx].startTime=e.target.value; setActiveRowJobs(n)}} className="bg-slate-800 text-white text-xs p-1 rounded border-none" />
-                                                    <input type="text" placeholder="Scope..." value={row.scope} onChange={e => {const n=[...activeRowJobs]; n[idx].scope=e.target.value; setActiveRowJobs(n)}} className="bg-slate-800 text-slate-300 text-xs p-1 rounded border-none flex-1" />
+                                                    <input type="text" placeholder="Scope of Work..." value={row.scope} onChange={e => {const n=[...activeRowJobs]; n[idx].scope=e.target.value; setActiveRowJobs(n)}} className="bg-slate-800 text-slate-300 text-xs p-1 rounded border-none flex-1 min-w-[150px]" />
                                                     
-                                                    <div className="flex gap-3 text-slate-500">
-                                                        <i onClick={() => sendDispatch(idx, 'email')} className="fas fa-envelope hover:text-blue-400 cursor-pointer"></i>
-                                                        <i onClick={() => sendDispatch(idx, 'sms')} className="fas fa-comment-sms hover:text-green-400 cursor-pointer"></i>
-                                                        <i onClick={() => setActiveRowJobs(activeRowJobs.filter((_, i) => i !== idx))} className="fas fa-trash hover:text-red-500 cursor-pointer"></i>
+                                                    <div className="flex gap-4 border-l border-slate-700 pl-4 text-slate-500">
+                                                        <button title="Email Dispatch" onClick={() => sendDispatch(idx, 'email')} className="hover:text-blue-400 transition-colors"><i className="fas fa-envelope"></i></button>
+                                                        <button title="SMS Dispatch" onClick={() => sendDispatch(idx, 'sms')} className="hover:text-green-400 transition-colors"><i className="fas fa-comment-sms"></i></button>
+                                                        <button title="Delete Row" onClick={() => setActiveRowJobs(activeRowJobs.filter((_, i) => i !== idx))} className="hover:text-red-500 transition-colors"><i className="fas fa-trash"></i></button>
                                                     </div>
                                                 </div>
 
                                                 <div className="p-3">
                                                     {/* PEOPLE SECTION */}
                                                     <div className="mb-4">
-                                                        <span className="text-[9px] font-black uppercase text-slate-400 tracking-widest block mb-2 px-1">Manpower</span>
+                                                        <div className="flex items-center gap-2 mb-2">
+                                                            <i className="fas fa-users text-[10px] text-slate-400"></i>
+                                                            <span className="text-[9px] font-black uppercase text-slate-400 tracking-widest">Manpower</span>
+                                                        </div>
                                                         <div className="flex flex-wrap gap-2 min-h-[30px]">
                                                             {peopleAssigns.map(a => (
-                                                                <div key={a.id} className={`p-2 rounded shadow-sm flex items-center gap-2 bg-${a.subType} min-w-[120px]`}>
+                                                                <div key={a.id} className={`p-2 rounded shadow-sm flex items-center gap-2 bg-${a.subType} min-w-[130px] border border-black/5`}>
                                                                     <span className="text-[10px] font-bold uppercase flex-1">{a.name}</span>
-                                                                    <i onClick={() => setAssignments(assignments.filter(x => x.id !== a.id))} className="fas fa-times opacity-50 hover:opacity-100 cursor-pointer text-[10px]"></i>
+                                                                    <i onClick={() => setAssignments(assignments.filter(x => x.id !== a.id))} className="fas fa-times opacity-40 hover:opacity-100 cursor-pointer text-[10px]"></i>
                                                                 </div>
                                                             ))}
                                                         </div>
@@ -166,16 +206,19 @@
 
                                                     {/* DIVIDER */}
                                                     <div className="border-t border-slate-100 my-2 relative">
-                                                        <span className="absolute -top-2 right-4 bg-white px-2 text-[8px] font-bold text-slate-300 uppercase">Equipment Assets</span>
+                                                        <div className="absolute -top-2.5 right-4 bg-white px-2 flex items-center gap-2">
+                                                            <i className="fas fa-tools text-[10px] text-slate-300"></i>
+                                                            <span className="text-[8px] font-black text-slate-300 uppercase tracking-tighter">Equipment Assets</span>
+                                                        </div>
                                                     </div>
 
                                                     {/* EQUIPMENT SECTION */}
                                                     <div className="mt-4">
                                                         <div className="flex flex-wrap gap-2 min-h-[30px]">
                                                             {equipAssigns.map(a => (
-                                                                <div key={a.id} className={`p-2 rounded shadow-sm flex items-center gap-2 bg-${a.subType === 'rental' ? 'rental' : 'heavy'} min-w-[120px]`}>
+                                                                <div key={a.id} className={`p-2 rounded shadow-sm flex items-center gap-2 bg-${a.subType === 'rental' ? 'rental' : 'heavy'} min-w-[130px] border border-black/5`}>
                                                                     <span className="text-[10px] font-bold uppercase flex-1 italic">{a.name}</span>
-                                                                    <i onClick={() => setAssignments(assignments.filter(x => x.id !== a.id))} className="fas fa-times opacity-50 hover:opacity-100 cursor-pointer text-[10px]"></i>
+                                                                    <i onClick={() => setAssignments(assignments.filter(x => x.id !== a.id))} className="fas fa-times opacity-40 hover:opacity-100 cursor-pointer text-[10px]"></i>
                                                                 </div>
                                                             ))}
                                                         </div>
@@ -189,38 +232,46 @@
                         )}
 
                         {activeTab === 'rentals' && (
-                            <div className="w-full bg-white p-6 rounded shadow border">
-                                <h2 className="font-bold mb-4">Add Third-Party Rental</h2>
+                            <div className="w-full bg-white p-6 rounded-xl shadow border">
+                                <h2 className="text-xl font-black uppercase italic mb-4">Rental Logistics</h2>
                                 <form onSubmit={(e) => {
                                     e.preventDefault();
                                     const fd = new FormData(e.target);
-                                    setRentals([...rentals, { id: Date.now(), name: fd.get('n'), vendor: fd.get('v'), status: 'Active', subType: 'rental' }]);
+                                    setRentals([...rentals, { id: Date.now(), name: fd.get('n').toUpperCase(), vendor: fd.get('v').toUpperCase(), status: 'Active', subType: 'rental' }]);
                                     e.target.reset();
-                                }} className="flex gap-4 mb-8">
-                                    <input name="n" placeholder="Equipment Name" className="border p-2 rounded text-sm flex-1" required />
-                                    <input name="v" placeholder="Vendor (Aaction/Sunbelt)" className="border p-2 rounded text-sm flex-1" required />
-                                    <button type="submit" className="bg-blue-600 text-white px-4 py-2 rounded font-bold text-sm">ADD RENTAL</button>
+                                }} className="flex flex-wrap gap-4 mb-8 bg-slate-50 p-4 rounded-lg">
+                                    <input name="n" placeholder="Equipment Name (e.g. MINI EX)" className="border p-2 rounded text-sm flex-1 min-w-[200px]" required />
+                                    <input name="v" placeholder="Vendor (e.g. SUNBELT)" className="border p-2 rounded text-sm flex-1 min-w-[200px]" required />
+                                    <button type="submit" className="bg-orange-600 text-white px-6 py-2 rounded font-bold text-sm uppercase">Add to Sidebar</button>
                                 </form>
                                 <table className="w-full text-left text-sm">
-                                    <thead className="bg-slate-100 uppercase text-[10px]"><tr><th className="p-3">Asset</th><th className="p-3">Vendor</th><th className="p-3">Status</th></tr></thead>
+                                    <thead className="bg-slate-900 text-white uppercase text-[10px]"><tr><th className="p-4">Asset</th><th className="p-4">Vendor</th><th className="p-4">Status</th><th className="p-4">Action</th></tr></thead>
                                     <tbody className="divide-y">
                                         {rentals.map(r => (
                                             <tr key={r.id}>
-                                                <td className="p-3 font-bold uppercase">{r.name}</td>
-                                                <td className="p-3">{r.vendor}</td>
-                                                <td className="p-3"><button onClick={() => setRentals(rentals.map(x => x.id === r.id ? {...x, status: x.status === 'Active' ? 'Returned' : 'Active'} : x))} className={`px-2 py-1 rounded text-[10px] font-bold ${r.status==='Active'?'bg-green-100 text-green-700':'bg-slate-100 text-slate-400'}`}>{r.status}</button></td>
+                                                <td className="p-4 font-bold">{r.name}</td>
+                                                <td className="p-4 text-slate-500">{r.vendor}</td>
+                                                <td className="p-4"><span className={`px-2 py-1 rounded text-[10px] font-bold ${r.status==='Active'?'bg-green-100 text-green-700':'bg-red-100 text-red-700'}`}>{r.status}</span></td>
+                                                <td className="p-4">
+                                                    <button onClick={() => setRentals(rentals.map(x => x.id === r.id ? {...x, status: x.status === 'Active' ? 'Returned' : 'Active'} : x))} className="text-[10px] font-black text-blue-600 uppercase underline">Toggle Status</button>
+                                                    <button onClick={() => setRentals(rentals.filter(x => x.id !== r.id))} className="ml-4 text-[10px] font-black text-red-400 uppercase underline">Delete</button>
+                                                </td>
                                             </tr>
                                         ))}
                                     </tbody>
                                 </table>
                             </div>
                         )}
+                        
+                        {activeTab === 'directory' && (
+                             <div className="w-full bg-white p-6 rounded shadow border italic text-slate-400 text-center">Directory Contact view under development. Fill contact info in script code.</div>
+                        )}
                     </main>
                 </div>
             );
         }
 
-        // Master Data
+        // --- MASTER DATA ---
         function getDefaultEmployees() {
             return [
                 { id: 1, name: 'Mike Harris', subType: 'super', email: '', phone: '' },
@@ -230,7 +281,7 @@
                 { id: 5, name: 'Dylan Weese', subType: 'foreman', email: '', phone: '' },
                 { id: 6, name: 'Martin Lopez', subType: 'foreman', email: '', phone: '' },
                 { id: 7, name: 'Ruben Flores', subType: 'foreman', email: '', phone: '' },
-                { id: 8, name: 'Jose Reyes', subType: 'foreman', email: '', phone: '' }, // Lead
+                { id: 8, name: 'Jose Reyes', subType: 'operator', email: '', phone: '' },
                 { id: 9, name: 'Christopher West', subType: 'operator', email: '', phone: '' },
                 { id: 10, name: 'Calvin Young', subType: 'operator', email: '', phone: '' },
                 { id: 11, name: 'Isaias Camacho', subType: 'operator', email: '', phone: '' },
@@ -244,7 +295,7 @@
                 { id: 19, name: 'Austin Matsler', subType: 'labor', email: '', phone: '' },
                 { id: 20, name: 'Clayton Setiak', subType: 'labor', email: '', phone: '' },
                 { id: 21, name: 'Jaime Gonzalez', subType: 'labor', email: '', phone: '' },
-                { id: 22, name: 'Nikolaos Patridis', subType: 'super', email: '', phone: '' }, // Shop
+                { id: 22, name: 'Nikolaos Patridis', subType: 'super', email: '', phone: '' },
                 { id: 23, name: 'Anthony Giamonna', subType: 'labor', email: '', phone: '' }
             ];
         }
@@ -254,15 +305,29 @@
                 { name: 'WT-03 Peterbilt 4k', subType: 'heavy' },
                 { name: 'WT-05 Peterbilt 2k', subType: 'heavy' },
                 { name: 'EXC JD 50G1 Mini', subType: 'heavy' },
+                { name: 'EXC JD 50G2 Mini', subType: 'heavy' },
+                { name: 'EXC JD 50G3 Mini', subType: 'heavy' },
                 { name: 'EXC JD 85G1', subType: 'heavy' },
+                { name: 'EXC JD 135G1', subType: 'heavy' },
+                { name: 'EXC JD 135G2', subType: 'heavy' },
+                { name: 'EXC JD 245G1', subType: 'heavy' },
                 { name: 'DOZ JD 700K', subType: 'heavy' },
+                { name: 'EQ-01 Trailer', subType: 'heavy' },
+                { name: 'EQ-02 Trailer', subType: 'heavy' },
                 { name: 'Wacker 1', subType: 'misc' },
+                { name: 'Wacker 2', subType: 'misc' },
                 { name: 'Kick Broom', subType: 'misc' }
             ];
         }
 
         function getHGEJobs() {
-            return [{ id: "102", name: "Seth Nobman Sunny Slope" }, { id: "121", name: "Yard Improvements" }, { id: "197", name: "I Street" }, { id: "209", name: "Haggerty 3950 I St" }, { id: "213", name: "Camp Newman Phase 4" }];
+            return [
+                { id: "102", name: "Seth Nobman Sunny Slope" }, 
+                { id: "121", name: "Yard Improvements" }, 
+                { id: "197", name: "I Street" }, 
+                { id: "209", name: "Haggerty 3950 I St" }, 
+                { id: "213", name: "Camp Newman Phase 4" }
+            ];
         }
 
         const root = ReactDOM.createRoot(document.getElementById('app'));
